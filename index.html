@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CarTelemetry Live</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    color-scheme: light;
+    --page:          #f9f9f7;
+    --surface-1:     #fcfcfb;
+    --text-primary:  #0b0b0b;
+    --text-secondary:#52514e;
+    --muted:         #898781;
+    --grid:          #e1e0d9;
+    --baseline:      #c3c2b7;
+    --border:        rgba(11,11,11,0.10);
+    --series-1:      #2a78d6;   /* speed */
+    --series-2:      #eb6834;   /* g-force */
+    --status-good:   #0ca30c;
+    --status-warn:   #fab219;
+    --status-crit:   #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:          #0d0d0d;
+      --surface-1:     #1a1a19;
+      --text-primary:  #ffffff;
+      --text-secondary:#c3c2b7;
+      --muted:         #898781;
+      --grid:          #2c2c2a;
+      --baseline:      #383835;
+      --border:        rgba(255,255,255,0.10);
+      --series-1:      #3987e5;
+      --series-2:      #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:          #0d0d0d;
+    --surface-1:     #1a1a19;
+    --text-primary:  #ffffff;
+    --text-secondary:#c3c2b7;
+    --muted:         #898781;
+    --grid:          #2c2c2a;
+    --baseline:      #383835;
+    --border:        rgba(255,255,255,0.10);
+    --series-1:      #3987e5;
+    --series-2:      #d95926;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 18px; margin: 0 12px 0 0; }
+  input, button, select {
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--baseline);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill.good .dot { background: var(--status-good); }
+  .pill.warn .dot { background: var(--status-warn); }
+  .pill.crit .dot { background: var(--status-crit); }
+
+  main { padding: 16px 18px 40px; max-width: 1200px; margin: 0 auto; }
+  .grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    margin-bottom: 12px;
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .tile .value { font-size: 26px; font-weight: 650; }
+  .tile .sub   { font-size: 12px; color: var(--muted); }
+  .tile.hero .value { font-size: 54px; line-height: 1.05; }
+  .tile.hero .unit  { font-size: 18px; color: var(--text-secondary); font-weight: 400; }
+
+  .row2 { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; margin-bottom: 12px; }
+  @media (max-width: 800px) { .row2 { grid-template-columns: 1fr; } }
+
+  .chartbox { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .chartbox h2 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; }
+  .chartbox .chartwrap { position: relative; height: 190px; }
+
+  #map { height: 380px; border-radius: 10px; border: 1px solid var(--border); }
+
+  #gcanvas { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
+
+  #replaybar {
+    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
+  }
+  #replaybar input[type=range] { flex: 1; min-width: 160px; }
+
+  details { margin-top: 16px; color: var(--text-secondary); }
+  table { border-collapse: collapse; font-size: 12px; width: 100%; overflow-x: auto; display: block; }
+  th, td { border-bottom: 1px solid var(--grid); padding: 4px 8px; text-align: right; font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 600; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CarTelemetry</h1>
+  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">not connected</span></span>
+  <input id="chInput" placeholder="channel id" size="12" autocapitalize="none">
+  <button id="connectBtn" class="primary">Watch live</button>
+  <button id="shareBtn" title="Copy a link to this channel">Copy link</button>
+  <label style="font-size:13px;color:var(--text-secondary)">
+    or replay a CSV log: <input type="file" id="fileInput" accept=".csv,text/csv">
+  </label>
+</header>
+
+<main>
+  <div id="replaybar">
+    <button id="playBtn">▶ Play</button>
+    <select id="speedSel">
+      <option value="1">1×</option>
+      <option value="4" selected>4×</option>
+      <option value="16">16×</option>
+    </select>
+    <input type="range" id="scrub" min="0" max="0" value="0">
+    <span id="replayTime" style="font-size:13px"></span>
+    <button id="exitReplay">Back to live</button>
+  </div>
+
+  <div class="grid">
+    <div class="tile hero" style="grid-column: span 2;">
+      <div class="label">Speed</div>
+      <div class="value"><span id="vSpeed">–</span> <span class="unit">km/h</span></div>
+      <div class="sub">max <span id="vMax">–</span> km/h</div>
+    </div>
+    <div class="tile" style="grid-row: span 2;">
+      <div class="label">G-force (phone frame)</div>
+      <canvas id="gcanvas" width="220" height="220"></canvas>
+      <div class="sub" style="text-align:center">total <span id="vG">–</span> g</div>
+    </div>
+    <div class="tile"><div class="label">Distance</div><div class="value" id="vDist">–</div><div class="sub">km this session</div></div>
+    <div class="tile"><div class="label">Altitude</div><div class="value" id="vAlt">–</div><div class="sub">m</div></div>
+    <div class="tile"><div class="label">Heading</div><div class="value" id="vHead">–</div><div class="sub" id="vHeadDeg">–</div></div>
+    <div class="tile"><div class="label">GPS accuracy</div><div class="value" id="vAcc">–</div><div class="sub">± m</div></div>
+    <div class="tile"><div class="label">Last update</div><div class="value" id="vAge">–</div><div class="sub" id="vCount">0 samples</div></div>
+  </div>
+
+  <div class="row2">
+    <div class="chartbox">
+      <h2>Speed — km/h, last 5 min</h2>
+      <div class="chartwrap"><canvas id="speedChart"></canvas></div>
+    </div>
+    <div class="chartbox">
+      <h2>G-force — total g, last 5 min</h2>
+      <div class="chartwrap"><canvas id="gChart"></canvas></div>
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <details>
+    <summary>Recent data (table)</summary>
+    <table id="dataTable">
+      <thead><tr><th>time</th><th>lat</th><th>lon</th><th>km/h</th><th>alt m</th><th>±m</th><th>g</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </details>
+
+  <p class="note">
+    Live data travels over the public HiveMQ MQTT broker — anyone who knows the channel ID can watch.
+    The G-force dot uses the phone's own axes (x = across the phone, y = along it), so mount the phone
+    consistently if you want lateral/longitudinal to be meaningful.
+  </p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+"use strict";
+
+const TOPIC_PREFIX = "cartelemetry/v1/";
+const params = new URLSearchParams(location.search);
+const WS_BROKER = params.get("broker") || "wss://broker.hivemq.com:8884/mqtt";
+const WINDOW_MS = 5 * 60 * 1000;
+
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---------- state ----------
+let mode = "live";           // "live" | "replay"
+let client = null;
+let samples = [];            // live samples
+let replay = { samples: [], idx: 0, playing: false, timer: null };
+let distanceKm = 0, maxSpeed = 0, lastGeo = null, lastMsgAt = 0;
+
+// ---------- status pill ----------
+function setStatus(kind, text) {
+  const pill = $("statusPill");
+  pill.className = "pill " + kind;
+  $("statusText").textContent = text;
+}
+
+// ---------- MQTT ----------
+function connect(ch) {
+  if (client) { try { client.end(true); } catch (e) {} client = null; }
+  if (!ch) { setStatus("", "enter a channel id"); return; }
+  history.replaceState(null, "", "?ch=" + encodeURIComponent(ch));
+  setStatus("warn", "connecting…");
+  client = mqtt.connect(WS_BROKER, { clean: true, connectTimeout: 8000, reconnectPeriod: 4000 });
+  client.on("connect", () => {
+    client.subscribe(TOPIC_PREFIX + ch);
+    setStatus("warn", "connected — waiting for data on “" + ch + "”");
+  });
+  client.on("message", (_t, payload) => {
+    try {
+      const s = JSON.parse(payload.toString());
+      lastMsgAt = Date.now();
+      addLiveSample(s);
+    } catch (e) {}
+  });
+  client.on("error", () => setStatus("crit", "broker error — retrying"));
+  client.on("offline", () => setStatus("crit", "broker offline — retrying"));
+}
+
+function addLiveSample(s) {
+  samples.push(s);
+  if (samples.length > 7200) samples.splice(0, samples.length - 7200);
+  if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+  if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
+    if (lastGeo) distanceKm += haversineKm(lastGeo.lat, lastGeo.lon, s.lat, s.lon);
+    lastGeo = { lat: s.lat, lon: s.lon };
+  }
+  if (mode === "live") render(s, samples);
+}
+
+// staleness watchdog
+setInterval(() => {
+  if (mode !== "live" || !client) return;
+  if (!lastMsgAt) return;
+  const age = (Date.now() - lastMsgAt) / 1000;
+  if (age < 5) setStatus("good", "live");
+  else if (age < 30) setStatus("warn", "stale — last data " + Math.round(age) + " s ago");
+  else setStatus("crit", "no data for " + Math.round(age) + " s");
+  $("vAge").textContent = age < 5 ? "now" : Math.round(age) + " s";
+}, 1000);
+
+// ---------- rendering ----------
+function fmt(v, d = 0) { return v == null || isNaN(v) ? "–" : Number(v).toFixed(d); }
+
+function render(s, all) {
+  $("vSpeed").textContent = fmt(s.spd, 0);
+  $("vMax").textContent = fmt(maxSpeed, 0);
+  $("vG").textContent = fmt(s.g, 2);
+  $("vDist").textContent = fmt(distanceKm, 2);
+  $("vAlt").textContent = fmt(s.alt, 0);
+  $("vAcc").textContent = fmt(s.hacc, 0);
+  $("vCount").textContent = all.length + " samples";
+  if (s.brg != null) {
+    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+    $("vHead").textContent = dirs[Math.round(s.brg / 45) % 8];
+    $("vHeadDeg").textContent = Math.round(s.brg) + "°";
+  }
+  drawG(s.ax, s.ay);
+  updateCharts(all, s.t);
+  updateMap(all, s);
+  updateTable(all);
+}
+
+// ---------- G bullseye ----------
+function drawG(ax, ay) {
+  const c = $("gcanvas"), ctx = c.getContext("2d");
+  const w = c.width, h = c.height, cx = w / 2, cy = h / 2;
+  const rMax = w / 2 - 14;           // 1.0 g at rMax
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = css("--grid");
+  ctx.fillStyle = css("--muted");
+  ctx.font = "10px system-ui";
+  [0.25, 0.5, 1.0].forEach(g => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, rMax * g, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillText(g + "g", cx + rMax * g + 2, cy - 2);
+  });
+  ctx.strokeStyle = css("--baseline");
+  ctx.beginPath(); ctx.moveTo(cx - rMax, cy); ctx.lineTo(cx + rMax, cy);
+  ctx.moveTo(cx, cy - rMax); ctx.lineTo(cx, cy + rMax); ctx.stroke();
+  if (ax == null || ay == null) return;
+  const gx = ax / 9.80665, gy = ay / 9.80665;
+  const mag = Math.hypot(gx, gy), clamp = Math.min(mag, 1.15);
+  const scale = mag > 0 ? clamp / mag : 0;
+  const px = cx + gx * scale * rMax;
+  const py = cy - gy * scale * rMax;
+  ctx.fillStyle = css("--series-2");
+  ctx.strokeStyle = css("--surface-1");
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+}
+
+// ---------- charts ----------
+let speedChart = null, gChart = null;
+
+function chartOpts(yMaxCb) {
+  return {
+    type: "line",
+    data: { datasets: [] },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      scales: {
+        x: {
+          type: "linear", min: -WINDOW_MS / 1000, max: 0,
+          ticks: { color: css("--muted"), callback: v => v === 0 ? "now" : (-v / 60).toFixed(1) + "m" },
+          grid: { color: css("--grid") },
+          border: { color: css("--baseline") }
+        },
+        y: {
+          min: 0, suggestedMax: yMaxCb,
+          ticks: { color: css("--muted") },
+          grid: { color: css("--grid") },
+          border: { color: css("--baseline") }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: "nearest", axis: "x", intersect: false,
+          backgroundColor: css("--surface-1"), titleColor: css("--text-primary"),
+          bodyColor: css("--text-secondary"), borderColor: css("--baseline"), borderWidth: 1
+        }
+      },
+      interaction: { mode: "nearest", axis: "x", intersect: false }
+    }
+  };
+}
+
+function makeCharts() {
+  if (speedChart) speedChart.destroy();
+  if (gChart) gChart.destroy();
+  const sOpts = chartOpts(60);
+  sOpts.data.datasets = [{ label: "Speed", data: [], borderColor: css("--series-1"),
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }];
+  speedChart = new Chart($("speedChart"), sOpts);
+  const gOpts = chartOpts(1);
+  gOpts.data.datasets = [{ label: "G", data: [], borderColor: css("--series-2"),
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }];
+  gChart = new Chart($("gChart"), gOpts);
+}
+
+let lastChartUpdate = 0;
+function updateCharts(all, nowT, force) {
+  if (!force && Date.now() - lastChartUpdate < 900) return;
+  lastChartUpdate = Date.now();
+  const from = nowT - WINDOW_MS;
+  const win = all.filter(s => s.t >= from);
+  speedChart.data.datasets[0].data = win.map(s => ({ x: (s.t - nowT) / 1000, y: s.spd ?? 0 }));
+  gChart.data.datasets[0].data = win.map(s => ({ x: (s.t - nowT) / 1000, y: s.g ?? 0 }));
+  speedChart.update("none");
+  gChart.update("none");
+}
+
+// ---------- map ----------
+let map, tileLayer, trail, marker;
+function isDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t === "dark") return true;
+  if (t === "light") return false;
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+function makeMap() {
+  map = L.map("map", { zoomControl: true }).setView([52.1, 5.3], 8);
+  setTiles();
+  trail = L.polyline([], { color: css("--series-1"), weight: 3 }).addTo(map);
+  marker = L.circleMarker([0, 0], { radius: 8, color: "#fff", weight: 2,
+    fillColor: css("--series-1"), fillOpacity: 1 });
+}
+function setTiles() {
+  if (tileLayer) map.removeLayer(tileLayer);
+  const style = isDark() ? "dark_all" : "light_all";
+  tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/" + style + "/{z}/{x}/{y}{r}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
+  }).addTo(map);
+}
+let followCar = true;
+function updateMap(all, s) {
+  const pts = all.filter(p => p.fix && p.lat != null).map(p => [p.lat, p.lon]);
+  trail.setLatLngs(pts);
+  if (s && s.fix && s.lat != null) {
+    marker.setLatLng([s.lat, s.lon]);
+    if (!map.hasLayer(marker)) marker.addTo(map);
+    if (followCar) map.setView([s.lat, s.lon], Math.max(map.getZoom(), 15));
+  }
+}
+
+// ---------- data table ----------
+function updateTable(all) {
+  const rows = all.slice(-15).reverse().map(s =>
+    "<tr><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
+    "</td><td>" + fmt(s.lon, 5) + "</td><td>" + fmt(s.spd, 1) + "</td><td>" + fmt(s.alt, 0) +
+    "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + fmt(s.g, 2) + "</td></tr>").join("");
+  $("dataTable").querySelector("tbody").innerHTML = rows;
+}
+
+// ---------- replay ----------
+function parseCsv(text) {
+  const lines = text.trim().split(/\r?\n/);
+  const head = lines[0].split(",");
+  const col = name => head.indexOf(name);
+  const iT = col("epoch_ms"), iLat = col("lat"), iLon = col("lon"), iAlt = col("alt_m"),
+        iSpd = col("speed_kmh"), iBrg = col("bearing_deg"), iAcc = col("gps_accuracy_m"),
+        iAx = col("ax_ms2"), iAy = col("ay_ms2"), iAz = col("az_ms2"), iG = col("g_total");
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const c = lines[i].split(",");
+    if (c.length < 3) continue;
+    const num = j => (j >= 0 && c[j] !== "" ? parseFloat(c[j]) : null);
+    out.push({
+      t: num(iT), lat: num(iLat), lon: num(iLon), alt: num(iAlt), spd: num(iSpd),
+      brg: num(iBrg), hacc: num(iAcc), ax: num(iAx), ay: num(iAy), az: num(iAz),
+      g: num(iG), fix: c[iLat] !== ""
+    });
+  }
+  return out.filter(s => s.t);
+}
+
+function enterReplay(list, name) {
+  if (!list.length) { alert("No usable rows in that CSV."); return; }
+  mode = "replay";
+  replay.samples = list;
+  replay.idx = 0;
+  stopPlayback();
+  $("replaybar").style.display = "flex";
+  $("scrub").max = list.length - 1;
+  $("scrub").value = 0;
+  setStatus("warn", "replay: " + name);
+  distanceKm = 0; maxSpeed = 0; lastGeo = null;
+  // precompute distance/max over whole file for the tiles
+  let lg = null;
+  list.forEach(s => {
+    if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+    if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
+      if (lg) distanceKm += haversineKm(lg.lat, lg.lon, s.lat, s.lon);
+      lg = { lat: s.lat, lon: s.lon };
+    }
+  });
+  showReplayIdx(0);
+  const pts = list.filter(p => p.fix && p.lat != null).map(p => [p.lat, p.lon]);
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.1));
+}
+
+function showReplayIdx(i) {
+  replay.idx = i;
+  $("scrub").value = i;
+  const s = replay.samples[i];
+  const upTo = replay.samples.slice(0, i + 1);
+  followCar = false;
+  render(s, upTo);
+  updateCharts(upTo, s.t, true);
+  $("replayTime").textContent = new Date(s.t).toLocaleTimeString() +
+    " (" + (i + 1) + "/" + replay.samples.length + ")";
+  $("vAge").textContent = "replay";
+}
+
+function stopPlayback() {
+  replay.playing = false;
+  if (replay.timer) { clearTimeout(replay.timer); replay.timer = null; }
+  $("playBtn").textContent = "▶ Play";
+}
+
+function stepPlayback() {
+  if (!replay.playing) return;
+  if (replay.idx >= replay.samples.length - 1) { stopPlayback(); return; }
+  const mult = parseFloat($("speedSel").value);
+  const cur = replay.samples[replay.idx], next = replay.samples[replay.idx + 1];
+  const dt = Math.min(Math.max(next.t - cur.t, 50), 5000) / mult;
+  replay.timer = setTimeout(() => { showReplayIdx(replay.idx + 1); stepPlayback(); }, dt);
+}
+
+// ---------- helpers ----------
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ---------- wiring ----------
+$("connectBtn").onclick = () => {
+  mode = "live"; followCar = true;
+  $("replaybar").style.display = "none";
+  samples = []; distanceKm = 0; maxSpeed = 0; lastGeo = null; lastMsgAt = 0;
+  connect($("chInput").value.trim().toLowerCase());
+};
+$("shareBtn").onclick = async () => {
+  const ch = $("chInput").value.trim().toLowerCase();
+  const url = location.origin + location.pathname + "?ch=" + encodeURIComponent(ch);
+  try { await navigator.clipboard.writeText(url); $("shareBtn").textContent = "Copied!"; }
+  catch (e) { prompt("Copy this link:", url); }
+  setTimeout(() => $("shareBtn").textContent = "Copy link", 1500);
+};
+$("fileInput").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => enterReplay(parseCsv(r.result), f.name);
+  r.readAsText(f);
+};
+$("scrub").oninput = e => { stopPlayback(); showReplayIdx(parseInt(e.target.value, 10)); };
+$("playBtn").onclick = () => {
+  if (replay.playing) { stopPlayback(); }
+  else { replay.playing = true; $("playBtn").textContent = "⏸ Pause"; stepPlayback(); }
+};
+$("exitReplay").onclick = () => $("connectBtn").click();
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  makeCharts(); setTiles();
+  const cur = mode === "replay" ? replay.samples[replay.idx] : samples[samples.length - 1];
+  if (cur) { render(cur, mode === "replay" ? replay.samples.slice(0, replay.idx + 1) : samples);
+             updateCharts(mode === "replay" ? replay.samples.slice(0, replay.idx + 1) : samples, cur.t, true); }
+});
+
+// ---------- init ----------
+makeCharts();
+makeMap();
+drawG(null, null);
+const chParam = (params.get("ch") || "").trim().toLowerCase();
+if (chParam) { $("chInput").value = chParam; connect(chParam); }
+else setStatus("", "enter the channel id shown in the app");
+</script>
+</body>
+</html>
