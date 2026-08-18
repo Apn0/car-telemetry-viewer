@@ -86,7 +86,24 @@
   .pill.warn .dot { background: var(--status-warn); }
   .pill.crit .dot { background: var(--status-crit); }
 
+  .tabbar {
+    display: flex; gap: 4px; padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--page);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    padding: 11px 16px; font-size: 14px; font-weight: 600;
+    color: var(--text-secondary); background: transparent; border: none;
+    border-bottom: 2px solid transparent; border-radius: 0;
+    cursor: pointer; white-space: nowrap;
+  }
+  .tab-btn.active { color: var(--text-primary); border-bottom-color: var(--series-1); }
+
   main { padding: 16px 18px 40px; max-width: 1200px; margin: 0 auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
   .grid {
     display: grid; gap: 12px;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -112,21 +129,28 @@
   .chartbox h2 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; }
   .chartbox .chartwrap { position: relative; height: 190px; }
 
-  #map { height: 380px; border-radius: 10px; border: 1px solid var(--border); }
+  #map { height: 65vh; min-height: 320px; border-radius: 10px; border: 1px solid var(--border); }
+  .map-status {
+    display: flex; gap: 16px; flex-wrap: wrap;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);
+  }
+  .map-status b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 
   #gcanvas { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
 
   #replaybar {
-    display: none; align-items: center; gap: 10px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     background: var(--surface-1); border: 1px solid var(--border);
     border-radius: 10px; padding: 10px 14px; margin-bottom: 12px;
   }
   #replaybar input[type=range] { flex: 1; min-width: 160px; }
+  #replaybar.inactive { opacity: 0.5; }
 
-  details { margin-top: 16px; color: var(--text-secondary); }
-  table { border-collapse: collapse; font-size: 12px; width: 100%; overflow-x: auto; display: block; }
-  th, td { border-bottom: 1px solid var(--grid); padding: 4px 8px; text-align: right; font-variant-numeric: tabular-nums; }
-  th { color: var(--muted); font-weight: 600; }
+  .table-wrap { max-height: 60vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  th, td { border-bottom: 1px solid var(--grid); padding: 6px 10px; text-align: right; font-variant-numeric: tabular-nums; }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface-1); }
   .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
 </style>
 </head>
@@ -138,68 +162,91 @@
   <input id="chInput" placeholder="channel id" size="12" autocapitalize="none">
   <button id="connectBtn" class="primary">Watch live</button>
   <button id="shareBtn" title="Copy a link to this channel">Copy link</button>
-  <label style="font-size:13px;color:var(--text-secondary)">
-    or replay a CSV log: <input type="file" id="fileInput" accept=".csv,text/csv">
-  </label>
 </header>
 
+<nav class="tabbar">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="map">Map</button>
+  <button class="tab-btn" data-tab="data">Data &amp; replay</button>
+</nav>
+
 <main>
-  <div id="replaybar">
-    <button id="playBtn">▶ Play</button>
-    <select id="speedSel">
-      <option value="1">1×</option>
-      <option value="4" selected>4×</option>
-      <option value="16">16×</option>
-    </select>
-    <input type="range" id="scrub" min="0" max="0" value="0">
-    <span id="replayTime" style="font-size:13px"></span>
-    <button id="exitReplay">Back to live</button>
-  </div>
-
-  <div class="grid">
-    <div class="tile hero" style="grid-column: span 2;">
-      <div class="label">Speed</div>
-      <div class="value"><span id="vSpeed">–</span> <span class="unit">km/h</span></div>
-      <div class="sub">max <span id="vMax">–</span> km/h</div>
+  <section id="panel-overview" class="panel active">
+    <div class="grid">
+      <div class="tile hero" style="grid-column: span 2;">
+        <div class="label">Speed</div>
+        <div class="value"><span id="vSpeed">–</span> <span class="unit">km/h</span></div>
+        <div class="sub">max <span id="vMax">–</span> km/h</div>
+      </div>
+      <div class="tile" style="grid-row: span 2;">
+        <div class="label">G-force (phone frame)</div>
+        <canvas id="gcanvas" width="220" height="220"></canvas>
+        <div class="sub" style="text-align:center">total <span id="vG">–</span> g</div>
+      </div>
+      <div class="tile"><div class="label">Distance</div><div class="value" id="vDist">–</div><div class="sub">km this session</div></div>
+      <div class="tile"><div class="label">Altitude</div><div class="value" id="vAlt">–</div><div class="sub">m</div></div>
+      <div class="tile"><div class="label">Heading</div><div class="value" id="vHead">–</div><div class="sub" id="vHeadDeg">–</div></div>
+      <div class="tile"><div class="label">GPS accuracy</div><div class="value" id="vAcc">–</div><div class="sub">± m</div></div>
+      <div class="tile"><div class="label">Last update</div><div class="value" id="vAge">–</div><div class="sub" id="vCount">0 samples</div></div>
     </div>
-    <div class="tile" style="grid-row: span 2;">
-      <div class="label">G-force (phone frame)</div>
-      <canvas id="gcanvas" width="220" height="220"></canvas>
-      <div class="sub" style="text-align:center">total <span id="vG">–</span> g</div>
+
+    <div class="row2">
+      <div class="chartbox">
+        <h2 id="speedChartTitle">Speed — km/h</h2>
+        <div class="chartwrap"><canvas id="speedChart"></canvas></div>
+      </div>
+      <div class="chartbox">
+        <h2 id="gChartTitle">G-force — total g</h2>
+        <div class="chartwrap"><canvas id="gChart"></canvas></div>
+      </div>
     </div>
-    <div class="tile"><div class="label">Distance</div><div class="value" id="vDist">–</div><div class="sub">km this session</div></div>
-    <div class="tile"><div class="label">Altitude</div><div class="value" id="vAlt">–</div><div class="sub">m</div></div>
-    <div class="tile"><div class="label">Heading</div><div class="value" id="vHead">–</div><div class="sub" id="vHeadDeg">–</div></div>
-    <div class="tile"><div class="label">GPS accuracy</div><div class="value" id="vAcc">–</div><div class="sub">± m</div></div>
-    <div class="tile"><div class="label">Last update</div><div class="value" id="vAge">–</div><div class="sub" id="vCount">0 samples</div></div>
-  </div>
 
-  <div class="row2">
-    <div class="chartbox">
-      <h2>Speed — km/h, last 5 min</h2>
-      <div class="chartwrap"><canvas id="speedChart"></canvas></div>
+    <p class="note">
+      Charts backfill automatically: the phone keeps a rolling buffer and republishes it on connect, so
+      opening this page mid-drive shows recent history, not just data from the moment you opened it.
+      The G-force dot uses the phone's own axes (x = across the phone, y = along it), so mount the phone
+      consistently if you want lateral/longitudinal to be meaningful.
+    </p>
+  </section>
+
+  <section id="panel-map" class="panel">
+    <div class="map-status">
+      <span>Speed <b id="mapSpeed">–</b> km/h</span>
+      <span>Heading <b id="mapHead">–</b></span>
+      <span>Accuracy ± <b id="mapAcc">–</b> m</span>
+      <span>Trail <b id="mapCount">0</b> points</span>
     </div>
-    <div class="chartbox">
-      <h2>G-force — total g, last 5 min</h2>
-      <div class="chartwrap"><canvas id="gChart"></canvas></div>
+    <div id="map"></div>
+  </section>
+
+  <section id="panel-data" class="panel">
+    <div id="replaybar" class="inactive">
+      <label style="font-size:13px;color:var(--text-secondary)">
+        Load a CSV log: <input type="file" id="fileInput" accept=".csv,text/csv">
+      </label>
+      <button id="playBtn" disabled>▶ Play</button>
+      <select id="speedSel">
+        <option value="1">1×</option>
+        <option value="4" selected>4×</option>
+        <option value="16">16×</option>
+      </select>
+      <input type="range" id="scrub" min="0" max="0" value="0" disabled>
+      <span id="replayTime" style="font-size:13px"></span>
+      <button id="exitReplay" disabled>Back to live</button>
     </div>
-  </div>
 
-  <div id="map"></div>
+    <div class="table-wrap">
+      <table id="dataTable">
+        <thead><tr><th>time</th><th>lat</th><th>lon</th><th>km/h</th><th>alt m</th><th>±m</th><th>heading</th><th>g</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
-  <details>
-    <summary>Recent data (table)</summary>
-    <table id="dataTable">
-      <thead><tr><th>time</th><th>lat</th><th>lon</th><th>km/h</th><th>alt m</th><th>±m</th><th>g</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </details>
-
-  <p class="note">
-    Live data travels over the public HiveMQ MQTT broker — anyone who knows the channel ID can watch.
-    The G-force dot uses the phone's own axes (x = across the phone, y = along it), so mount the phone
-    consistently if you want lateral/longitudinal to be meaningful.
-  </p>
+    <p class="note">
+      Live data travels over the public HiveMQ MQTT broker — anyone who knows the channel ID can watch.
+      Load a CSV log shared from the app to replay a full past drive here, with play/pause and a scrubber.
+    </p>
+  </section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
@@ -212,17 +259,32 @@
 const TOPIC_PREFIX = "cartelemetry/v1/";
 const params = new URLSearchParams(location.search);
 const WS_BROKER = params.get("broker") || "wss://broker.hivemq.com:8884/mqtt";
-const WINDOW_MS = 5 * 60 * 1000;
+const WINDOW_MS = 10 * 60 * 1000;
 
 const $ = id => document.getElementById(id);
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
+document.getElementById("speedChartTitle").textContent = "Speed — km/h, last " + (WINDOW_MS / 60000) + " min";
+document.getElementById("gChartTitle").textContent = "G-force — total g, last " + (WINDOW_MS / 60000) + " min";
+
 // ---------- state ----------
 let mode = "live";           // "live" | "replay"
 let client = null;
-let samples = [];            // live samples
+let samples = [];            // live + backfilled history samples
+let seenTs = new Set();      // dedupe history vs live overlap
 let replay = { samples: [], idx: 0, playing: false, timer: null };
 let distanceKm = 0, maxSpeed = 0, lastGeo = null, lastMsgAt = 0;
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+function switchTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + name));
+  if (name === "map" && map) setTimeout(() => map.invalidateSize(), 50);
+  if (name === "overview" && speedChart) { speedChart.resize(); gChart.resize(); }
+}
 
 // ---------- status pill ----------
 function setStatus(kind, text) {
@@ -240,13 +302,18 @@ function connect(ch) {
   client = mqtt.connect(WS_BROKER, { clean: true, connectTimeout: 8000, reconnectPeriod: 4000 });
   client.on("connect", () => {
     client.subscribe(TOPIC_PREFIX + ch);
+    client.subscribe(TOPIC_PREFIX + ch + "/history");
     setStatus("warn", "connected — waiting for data on “" + ch + "”");
   });
-  client.on("message", (_t, payload) => {
+  client.on("message", (topic, payload) => {
     try {
-      const s = JSON.parse(payload.toString());
-      lastMsgAt = Date.now();
-      addLiveSample(s);
+      const msg = JSON.parse(payload.toString());
+      if (topic.endsWith("/history")) {
+        ingestHistory(msg.samples || []);
+      } else {
+        lastMsgAt = Date.now();
+        addLiveSample(msg);
+      }
     } catch (e) {}
   });
   client.on("error", () => setStatus("crit", "broker error — retrying"));
@@ -254,6 +321,10 @@ function connect(ch) {
 }
 
 function addLiveSample(s) {
+  if (s.t != null) {
+    if (seenTs.has(s.t)) return;
+    seenTs.add(s.t);
+  }
   samples.push(s);
   if (samples.length > 7200) samples.splice(0, samples.length - 7200);
   if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
@@ -262,6 +333,37 @@ function addLiveSample(s) {
     lastGeo = { lat: s.lat, lon: s.lon };
   }
   if (mode === "live") render(s, samples);
+}
+
+// backfill: the phone republishes a rolling buffer as a retained "/history"
+// message, delivered immediately on subscribe — this is what makes the
+// charts show data from before the page was opened.
+function ingestHistory(list) {
+  let added = false;
+  for (const s of list) {
+    if (s.t == null || seenTs.has(s.t)) continue;
+    seenTs.add(s.t);
+    samples.push(s);
+    added = true;
+  }
+  if (!added) return;
+  samples.sort((a, b) => a.t - b.t);
+  recomputeStats();
+  if (mode === "live") {
+    const latest = samples[samples.length - 1];
+    render(latest, samples);
+  }
+}
+
+function recomputeStats() {
+  distanceKm = 0; maxSpeed = 0; lastGeo = null;
+  for (const s of samples) {
+    if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+    if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
+      if (lastGeo) distanceKm += haversineKm(lastGeo.lat, lastGeo.lon, s.lat, s.lon);
+      lastGeo = { lat: s.lat, lon: s.lon };
+    }
+  }
 }
 
 // staleness watchdog
@@ -277,6 +379,10 @@ setInterval(() => {
 
 // ---------- rendering ----------
 function fmt(v, d = 0) { return v == null || isNaN(v) ? "–" : Number(v).toFixed(d); }
+function headingLabel(brg) {
+  const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+  return dirs[Math.round(brg / 45) % 8] + " " + Math.round(brg) + "°";
+}
 
 function render(s, all) {
   $("vSpeed").textContent = fmt(s.spd, 0);
@@ -286,10 +392,13 @@ function render(s, all) {
   $("vAlt").textContent = fmt(s.alt, 0);
   $("vAcc").textContent = fmt(s.hacc, 0);
   $("vCount").textContent = all.length + " samples";
+  $("mapSpeed").textContent = fmt(s.spd, 0);
+  $("mapAcc").textContent = fmt(s.hacc, 0);
   if (s.brg != null) {
-    const dirs = ["N","NE","E","SE","S","SW","W","NW"];
-    $("vHead").textContent = dirs[Math.round(s.brg / 45) % 8];
-    $("vHeadDeg").textContent = Math.round(s.brg) + "°";
+    const label = headingLabel(s.brg);
+    $("vHead").textContent = label.split(" ")[0];
+    $("vHeadDeg").textContent = label.split(" ")[1];
+    $("mapHead").textContent = label;
   }
   drawG(s.ax, s.ay);
   updateCharts(all, s.t);
@@ -418,6 +527,7 @@ let followCar = true;
 function updateMap(all, s) {
   const pts = all.filter(p => p.fix && p.lat != null).map(p => [p.lat, p.lon]);
   trail.setLatLngs(pts);
+  $("mapCount").textContent = pts.length;
   if (s && s.fix && s.lat != null) {
     marker.setLatLng([s.lat, s.lon]);
     if (!map.hasLayer(marker)) marker.addTo(map);
@@ -427,10 +537,11 @@ function updateMap(all, s) {
 
 // ---------- data table ----------
 function updateTable(all) {
-  const rows = all.slice(-15).reverse().map(s =>
+  const rows = all.slice(-300).reverse().map(s =>
     "<tr><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
     "</td><td>" + fmt(s.lon, 5) + "</td><td>" + fmt(s.spd, 1) + "</td><td>" + fmt(s.alt, 0) +
-    "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + fmt(s.g, 2) + "</td></tr>").join("");
+    "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + (s.brg != null ? Math.round(s.brg) + "°" : "–") +
+    "</td><td>" + fmt(s.g, 2) + "</td></tr>").join("");
   $("dataTable").querySelector("tbody").innerHTML = rows;
 }
 
@@ -462,10 +573,12 @@ function enterReplay(list, name) {
   replay.samples = list;
   replay.idx = 0;
   stopPlayback();
-  $("replaybar").style.display = "flex";
+  $("replaybar").classList.remove("inactive");
+  ["playBtn", "scrub", "exitReplay"].forEach(id => $(id).disabled = false);
   $("scrub").max = list.length - 1;
   $("scrub").value = 0;
   setStatus("warn", "replay: " + name);
+  switchTab("data");
   distanceKm = 0; maxSpeed = 0; lastGeo = null;
   // precompute distance/max over whole file for the tiles
   let lg = null;
@@ -521,8 +634,9 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 // ---------- wiring ----------
 $("connectBtn").onclick = () => {
   mode = "live"; followCar = true;
-  $("replaybar").style.display = "none";
-  samples = []; distanceKm = 0; maxSpeed = 0; lastGeo = null; lastMsgAt = 0;
+  $("replaybar").classList.add("inactive");
+  ["playBtn", "scrub", "exitReplay"].forEach(id => $(id).disabled = true);
+  samples = []; seenTs = new Set(); distanceKm = 0; maxSpeed = 0; lastGeo = null; lastMsgAt = 0;
   connect($("chInput").value.trim().toLowerCase());
 };
 $("shareBtn").onclick = async () => {
