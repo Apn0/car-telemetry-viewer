@@ -139,6 +139,13 @@
 
   #gcanvas { width: 100%; max-width: 220px; display: block; margin: 0 auto; }
 
+  #fwBox { margin-bottom: 12px; }
+  #fwBox .fwHead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+  #fwBox .fwHead h2 { margin: 0; flex: 1 1 auto; }
+  #fwBox .fwHead label { font-size: 12px; color: var(--text-secondary); }
+  #fwStatus { font-size: 12px; color: var(--muted); }
+  #fwCanvas { width: 100%; height: 260px; display: block; border-radius: 8px; background: var(--page); }
+
   #replaybar {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     background: var(--surface-1); border: 1px solid var(--border);
@@ -162,6 +169,7 @@
   <input id="chInput" placeholder="channel id" size="12" autocapitalize="none">
   <button id="connectBtn" class="primary">Watch live</button>
   <button id="shareBtn" title="Copy a link to this channel">Copy link</button>
+  <a href="logger.html" style="font-size:13px;color:var(--text-secondary)">Log a drive from this phone →</a>
 </header>
 
 <nav class="tabbar">
@@ -199,6 +207,21 @@
         <h2 id="gChartTitle">G-force — total g</h2>
         <div class="chartwrap"><canvas id="gChart"></canvas></div>
       </div>
+    </div>
+
+    <div id="fwBox" class="chartbox">
+      <div class="fwHead">
+        <h2 style="margin:0">Forward view <span id="fwAheadLabel" style="font-weight:400"></span></h2>
+        <label>ahead
+          <input type="range" id="fwAhead" min="300" max="500" step="50" value="400" style="width:90px;vertical-align:middle">
+        </label>
+        <label>load reference route:
+          <input type="file" id="fwFile" accept=".gpx,.csv,text/csv,application/gpx+xml">
+        </label>
+        <button id="fwClear" title="Remove the loaded route">Clear route</button>
+      </div>
+      <canvas id="fwCanvas" width="900" height="260"></canvas>
+      <div id="fwStatus">no reference route loaded — load a GPX or CSV trace of the track (e.g. a Nordschleife lap) to see what's coming up ahead</div>
     </div>
 
     <p class="note">
@@ -275,6 +298,219 @@ let seenTs = new Set();      // dedupe history vs live overlap
 let replay = { samples: [], idx: 0, playing: false, timer: null };
 let distanceKm = 0, maxSpeed = 0, lastGeo = null, lastMsgAt = 0;
 
+// ---------- forward view ----------
+// Shows the upcoming 300-500m of a preloaded reference route (e.g. a GPX
+// lap of the Nordschleife/Green Hell), useful for blind crests/corners
+// where you want to see what's coming before you get there.
+const FW_STORAGE_KEY = "cartelemetry_route_v1";
+const DEFAULT_ROUTE_URL = "routes/nordschleife.gpx";
+const DEFAULT_ROUTE_NAME = "Nürburgring Nordschleife (bundled)";
+let route = null;          // { name, points: [{lat,lon,ele,distM}], loop }
+let routeMatchIdx = 0;     // last matched nearest-point index, for fast incremental search
+
+function haversineM(lat1, lon1, lat2, lon2) { return haversineKm(lat1, lon1, lat2, lon2) * 1000; }
+
+function buildRoute(name, rawPoints) {
+  const points = rawPoints.filter(p => p.lat != null && p.lon != null && !isNaN(p.lat) && !isNaN(p.lon));
+  if (points.length < 2) return null;
+  let dist = 0;
+  points[0].distM = 0;
+  for (let i = 1; i < points.length; i++) {
+    dist += haversineM(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
+    points[i].distM = dist;
+  }
+  const loop = haversineM(points[0].lat, points[0].lon, points[points.length - 1].lat, points[points.length - 1].lon) < 200;
+  return { name, points, loop };
+}
+
+function parseGpx(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  const pts = Array.from(doc.getElementsByTagName("trkpt")).map(el => {
+    const ele = el.getElementsByTagName("ele")[0];
+    return {
+      lat: parseFloat(el.getAttribute("lat")),
+      lon: parseFloat(el.getAttribute("lon")),
+      ele: ele ? parseFloat(ele.textContent) : null
+    };
+  });
+  return pts;
+}
+
+function loadRoute(name, points) {
+  route = buildRoute(name, points);
+  routeMatchIdx = 0;
+  if (route) {
+    try { localStorage.setItem(FW_STORAGE_KEY, JSON.stringify(route)); } catch (e) {}
+    $("fwStatus").textContent = route.name + " — " + route.points.length + " pts, " +
+      (route.points[route.points.length - 1].distM / 1000).toFixed(2) + " km" + (route.loop ? " (loop)" : "");
+  } else {
+    $("fwStatus").textContent = "couldn't parse a usable route from that file";
+  }
+}
+
+function clearRoute() {
+  route = null;
+  try { localStorage.removeItem(FW_STORAGE_KEY); } catch (e) {}
+  $("fwStatus").textContent = "no reference route loaded — load a GPX or CSV trace of the track (e.g. a Nordschleife lap) to see what's coming up ahead";
+  drawForwardCanvas(null);
+}
+
+function loadPersistedRoute() {
+  try {
+    const raw = localStorage.getItem(FW_STORAGE_KEY);
+    if (!raw) return false;
+    route = JSON.parse(raw);
+    routeMatchIdx = 0;
+    $("fwStatus").textContent = route.name + " — " + route.points.length + " pts, " +
+      (route.points[route.points.length - 1].distM / 1000).toFixed(2) + " km" + (route.loop ? " (loop)" : "");
+    return true;
+  } catch (e) { route = null; return false; }
+}
+
+// First run (nothing in localStorage yet): ship with the Nordschleife loaded
+// out of the box, since that's the track this viewer was built for. Loading
+// any other GPX/CSV via "load reference route" replaces it, same as before.
+async function loadDefaultRoute() {
+  try {
+    const res = await fetch(DEFAULT_ROUTE_URL);
+    if (!res.ok) return;
+    const pts = parseGpx(await res.text());
+    loadRoute(DEFAULT_ROUTE_NAME, pts);
+  } catch (e) { /* e.g. opened as a local file:// page without a server — ignore */ }
+}
+
+// Find the route point nearest to (lat,lon), searching a window around the
+// last match first (cheap while driving along the route) and falling back
+// to a full scan if that window doesn't contain a close point.
+function findNearestRouteIdx(lat, lon) {
+  const pts = route.points;
+  const searchRange = (from, to) => {
+    let bestI = -1, bestD = Infinity;
+    for (let i = Math.max(0, from); i < Math.min(pts.length, to); i++) {
+      const d = haversineM(lat, lon, pts[i].lat, pts[i].lon);
+      if (d < bestD) { bestD = d; bestI = i; }
+    }
+    return { bestI, bestD };
+  };
+  let { bestI, bestD } = searchRange(routeMatchIdx - 40, routeMatchIdx + 120);
+  if (bestI === -1 || bestD > 150) {
+    ({ bestI, bestD } = searchRange(0, pts.length));
+  }
+  return bestI;
+}
+
+// Collect route points from nearest-match up to `aheadM` further along.
+function forwardWindow(lat, lon, aheadM) {
+  if (!route) return [];
+  const pts = route.points;
+  const idx = findNearestRouteIdx(lat, lon);
+  routeMatchIdx = idx;
+  const startDist = pts[idx].distM;
+  const out = [];
+  let i = idx;
+  const totalDist = pts[pts.length - 1].distM;
+  while (out.length < 4000) {
+    const p = pts[i];
+    const d = p.distM - startDist + (p.distM < startDist ? totalDist : 0); // handle loop wrap
+    out.push({ lat: p.lat, lon: p.lon, ele: p.ele, aheadM: d });
+    if (d >= aheadM) break;
+    i++;
+    if (i >= pts.length) {
+      if (!route.loop) break;
+      i = 0;
+    }
+  }
+  return out;
+}
+
+function drawForwardCanvas(win, carBearing) {
+  const c = $("fwCanvas");
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth || 900, h = c.clientHeight || 260;
+  if (c.width !== w * dpr || c.height !== h * dpr) { c.width = w * dpr; c.height = h * dpr; }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  if (!win || win.length < 2) {
+    ctx.fillStyle = css("--muted");
+    ctx.font = "13px system-ui";
+    ctx.fillText(route ? "waiting for a GPS fix…" : "no route loaded", 12, h / 2);
+    return;
+  }
+
+  const originLat = win[0].lat, originLon = win[0].lon;
+  const brgRad = ((carBearing || 0) * Math.PI) / 180;
+  const cosLat = Math.cos((originLat * Math.PI) / 180);
+  // local ENU meters relative to car position, then rotate so "forward" = up
+  const proj = p => {
+    const ex = (p.lon - originLon) * 111320 * cosLat;
+    const ny = (p.lat - originLat) * 110574;
+    const fx = ex * Math.cos(brgRad) - ny * Math.sin(brgRad);   // right
+    const fy = ex * Math.sin(brgRad) + ny * Math.cos(brgRad);   // forward
+    return { fx, fy };
+  };
+  const projected = win.map(proj);
+  const maxAhead = Math.max(...projected.map(p => p.fy), 1);
+  const maxSide = Math.max(...projected.map(p => Math.abs(p.fx)), 1);
+
+  const marginBottom = 26, marginTop = 10, marginSide = 24;
+  const usableH = h - marginTop - marginBottom;
+  const usableW = w - marginSide * 2;
+  const scale = Math.min(usableH / maxAhead, usableW / (2 * maxSide));
+  const cx = w / 2, cy = h - marginBottom;
+  const toCanvas = p => ({ x: cx + p.fx * scale, y: cy - p.fy * scale });
+
+  // distance ticks every 100m
+  ctx.strokeStyle = css("--grid");
+  ctx.fillStyle = css("--muted");
+  ctx.font = "10px system-ui";
+  ctx.textAlign = "right";
+  for (let d = 100; d <= maxAhead; d += 100) {
+    const y = cy - d * scale;
+    ctx.beginPath(); ctx.moveTo(marginSide, y); ctx.lineTo(w - marginSide, y); ctx.stroke();
+    ctx.fillText(d + "m", w - 6, y - 3);
+  }
+  ctx.textAlign = "left";
+
+  // route path
+  ctx.strokeStyle = css("--series-1");
+  ctx.lineWidth = 4;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  projected.forEach((p, i) => {
+    const cp = toCanvas(p);
+    if (i === 0) ctx.moveTo(cp.x, cp.y); else ctx.lineTo(cp.x, cp.y);
+  });
+  ctx.stroke();
+
+  // elevation-change hint: color the endpoint if we have elevation data
+  const withEle = win.filter(p => p.ele != null);
+  if (withEle.length >= 2) {
+    const rise = withEle[withEle.length - 1].ele - withEle[0].ele;
+    ctx.fillStyle = css("--text-secondary");
+    ctx.font = "12px system-ui";
+    ctx.fillText((rise >= 0 ? "▲ +" : "▼ ") + rise.toFixed(0) + "m over next " + Math.round(maxAhead) + "m", 12, 16);
+  }
+
+  // car marker at origin, pointing up (forward)
+  ctx.fillStyle = css("--series-2");
+  ctx.strokeStyle = css("--surface-1");
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 9); ctx.lineTo(cx - 7, cy + 7); ctx.lineTo(cx + 7, cy + 7);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+
+function updateForwardView(s) {
+  const aheadM = parseInt($("fwAhead").value, 10);
+  $("fwAheadLabel").textContent = "— next " + aheadM + "m";
+  if (!route || !s || !s.fix || s.lat == null) { drawForwardCanvas(null); return; }
+  const win = forwardWindow(s.lat, s.lon, aheadM);
+  drawForwardCanvas(win, s.brg);
+}
+
 // ---------- tabs ----------
 document.querySelectorAll(".tab-btn").forEach(btn => {
   btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -283,7 +519,11 @@ function switchTab(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + name));
   if (name === "map" && map) setTimeout(() => map.invalidateSize(), 50);
-  if (name === "overview" && speedChart) { speedChart.resize(); gChart.resize(); }
+  if (name === "overview" && speedChart) {
+    speedChart.resize(); gChart.resize();
+    const cur = mode === "replay" ? replay.samples[replay.idx] : samples[samples.length - 1];
+    updateForwardView(cur);
+  }
 }
 
 // ---------- status pill ----------
@@ -403,6 +643,7 @@ function render(s, all) {
   drawG(s.ax, s.ay);
   updateCharts(all, s.t);
   updateMap(all, s);
+  updateForwardView(s);
   updateTable(all);
 }
 
@@ -654,6 +895,23 @@ $("fileInput").onchange = e => {
   r.readAsText(f);
 };
 $("scrub").oninput = e => { stopPlayback(); showReplayIdx(parseInt(e.target.value, 10)); };
+$("fwFile").onchange = e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const isGpx = /\.gpx$/i.test(f.name) || r.result.trim().startsWith("<?xml") || r.result.includes("<gpx");
+    const pts = isGpx ? parseGpx(r.result) : parseCsv(r.result).map(p => ({ lat: p.lat, lon: p.lon, ele: p.alt }));
+    loadRoute(f.name, pts);
+  };
+  r.readAsText(f);
+};
+$("fwClear").onclick = clearRoute;
+$("fwAhead").oninput = () => {
+  $("fwAheadLabel").textContent = "— next " + $("fwAhead").value + "m";
+  const cur = mode === "replay" ? replay.samples[replay.idx] : samples[samples.length - 1];
+  if (cur) updateForwardView(cur);
+};
 $("playBtn").onclick = () => {
   if (replay.playing) { stopPlayback(); }
   else { replay.playing = true; $("playBtn").textContent = "⏸ Pause"; stepPlayback(); }
@@ -671,6 +929,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
 makeCharts();
 makeMap();
 drawG(null, null);
+if (!loadPersistedRoute()) loadDefaultRoute();
+drawForwardCanvas(null);
 const chParam = (params.get("ch") || "").trim().toLowerCase();
 if (chParam) { $("chInput").value = chParam; connect(chParam); }
 else setStatus("", "enter the channel id shown in the app");

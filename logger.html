@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CarTelemetry Logger</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:          #f9f9f7;
+    --surface-1:     #fcfcfb;
+    --text-primary:  #0b0b0b;
+    --text-secondary:#52514e;
+    --muted:         #898781;
+    --grid:          #e1e0d9;
+    --baseline:      #c3c2b7;
+    --border:        rgba(11,11,11,0.10);
+    --series-1:      #2a78d6;
+    --series-2:      #eb6834;
+    --status-good:   #0ca30c;
+    --status-warn:   #fab219;
+    --status-crit:   #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:          #0d0d0d;
+      --surface-1:     #1a1a19;
+      --text-primary:  #ffffff;
+      --text-secondary:#c3c2b7;
+      --muted:         #898781;
+      --grid:          #2c2c2a;
+      --baseline:      #383835;
+      --border:        rgba(255,255,255,0.10);
+      --series-1:      #3987e5;
+      --series-2:      #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:          #0d0d0d;
+    --surface-1:     #1a1a19;
+    --text-primary:  #ffffff;
+    --text-secondary:#c3c2b7;
+    --muted:         #898781;
+    --grid:          #2c2c2a;
+    --baseline:      #383835;
+    --border:        rgba(255,255,255,0.10);
+    --series-1:      #3987e5;
+    --series-2:      #d95926;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 17px; margin: 0; flex: 1 1 auto; }
+  input, button, select {
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--baseline);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  button { cursor: pointer; -webkit-user-select: none; user-select: none; }
+  button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+  button.stop { background: var(--status-crit); color: #fff; border-color: transparent; }
+  button:disabled { opacity: 0.5; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill.good .dot { background: var(--status-good); }
+  .pill.warn .dot { background: var(--status-warn); }
+  .pill.crit .dot { background: var(--status-crit); }
+
+  main { padding: 16px; max-width: 480px; margin: 0 auto 60px; }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .row label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .row input[type=text], .row input[type=number] { flex: 1 1 auto; min-width: 0; }
+
+  .startBtn { display: block; width: 100%; padding: 20px; font-size: 20px; font-weight: 650;
+    border-radius: 14px; margin: 4px 0 16px; }
+
+  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; min-width: 0; }
+  .tile.hero { grid-column: span 2; text-align: center; }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .tile .value { font-size: 22px; font-weight: 650; }
+  .tile.hero .value { font-size: 48px; line-height: 1.05; }
+  .tile .unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .actions button, .actions a { flex: 1 1 auto; text-align: center; text-decoration: none; }
+
+  details { margin-top: 14px; color: var(--text-secondary); }
+  details summary { cursor: pointer; padding: 6px 0; }
+  .adv-row { margin: 10px 0; }
+  .adv-row label { display: block; font-size: 12px; margin-bottom: 4px; }
+  .adv-row input { width: 100%; }
+
+  .note { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CarTelemetry Logger</h1>
+  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">stopped</span></span>
+</header>
+
+<main>
+  <div class="row">
+    <label for="chInput">channel</label>
+    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <button id="newChBtn" title="Generate a new random channel id">🎲</button>
+  </div>
+
+  <button id="startStopBtn" class="startBtn primary">Start logging</button>
+
+  <div class="hud">
+    <div class="tile hero">
+      <div class="label">Speed</div>
+      <div class="value"><span id="hudSpeed">–</span> <span class="unit">km/h</span></div>
+    </div>
+    <div class="tile"><div class="label">GPS</div><div class="value" id="hudFix">–</div><div class="label" id="hudAcc"></div></div>
+    <div class="tile"><div class="label">G-force</div><div class="value" id="hudG">–</div></div>
+    <div class="tile" style="grid-column: span 2;"><div class="label">Logged this session</div><div class="value" id="hudSent">0 samples</div></div>
+  </div>
+
+  <div class="actions">
+    <a id="viewerLink" href="index.html" target="_blank" rel="noopener">Open live viewer</a>
+    <button id="downloadBtn" disabled>Download CSV</button>
+  </div>
+
+  <details>
+    <summary>Advanced</summary>
+    <div class="adv-row">
+      <label for="intervalInput">sample interval (ms, 200–60000)</label>
+      <input id="intervalInput" type="number" min="200" max="60000" step="100" value="1000">
+    </div>
+    <div class="adv-row">
+      <label for="brokerInput">MQTT broker (WebSocket)</label>
+      <input id="brokerInput" type="text" value="wss://broker.hivemq.com:8884/mqtt">
+    </div>
+  </details>
+
+  <p class="note">
+    Runs entirely in this tab — no app to install. Needs GPS + motion-sensor permission
+    (iOS asks once per session when you tap Start), and the screen has to stay on with this
+    tab in the foreground the whole time you're logging: browsers don't get background GPS
+    the way a native app does, so switching apps or letting the screen lock pauses logging.
+    Data streams live to the same public HiveMQ broker as the Android app — anyone with your
+    channel ID can watch it in the viewer. Samples are also buffered here for <b>Download CSV</b>,
+    but that buffer only lives in this tab, so download it before you close the page.
+  </p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+"use strict";
+
+const TOPIC_PREFIX = "cartelemetry/v1/";
+const CH_KEY = "cartelemetry_channel_v1";
+const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/1/i/l/o — avoids look-alikes
+const $ = id => document.getElementById(id);
+
+function randomChannel() {
+  const arr = new Uint32Array(8);
+  crypto.getRandomValues(arr);
+  let id = "";
+  for (let i = 0; i < 8; i++) id += ALPHABET[arr[i] % ALPHABET.length];
+  return id;
+}
+function normalizeChannel(raw) {
+  return (raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+}
+function loadChannel() {
+  let id = localStorage.getItem(CH_KEY);
+  if (!id) { id = randomChannel(); localStorage.setItem(CH_KEY, id); }
+  return id;
+}
+
+// ---------- state ----------
+let running = false;
+let client = null;
+let watchId = null;
+let wakeLock = null;
+let tickTimer = null;
+let lastPosition = null;      // {lat, lon, alt, spd, brg, hacc, t}
+let accel = [0, 0, 0];        // smoothed m/s^2, gravity removed if the sensor gives us that
+let haveLinearAccel = false;
+let samplesSent = 0;
+let rows = [];                 // buffered CSV lines for this session
+let channel = loadChannel();
+
+$("chInput").value = channel;
+updateViewerLink();
+
+function setStatus(kind, text) {
+  $("statusPill").className = "pill " + kind;
+  $("statusText").textContent = text;
+}
+function updateViewerLink() {
+  $("viewerLink").href = "index.html?ch=" + encodeURIComponent(channel);
+}
+function round2(v) { return Math.round(v * 100) / 100; }
+function round3(v) { return Math.round(v * 1000) / 1000; }
+function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
+
+// ---------- sensors ----------
+function onMotion(e) {
+  let a = e.acceleration;
+  let lin = true;
+  if (!a || (a.x == null && a.y == null && a.z == null)) {
+    a = e.accelerationIncludingGravity;
+    lin = false;
+  }
+  if (!a) return;
+  haveLinearAccel = lin;
+  accel[0] = 0.7 * accel[0] + 0.3 * (a.x || 0);
+  accel[1] = 0.7 * accel[1] + 0.3 * (a.y || 0);
+  accel[2] = 0.7 * accel[2] + 0.3 * (a.z || 0);
+}
+
+function onPosition(pos) {
+  const c = pos.coords;
+  lastPosition = {
+    lat: c.latitude, lon: c.longitude,
+    alt: c.altitude, spd: c.speed, brg: c.heading, hacc: c.accuracy,
+    t: Date.now()
+  };
+}
+function onPositionError(err) {
+  setStatus("crit", "GPS error: " + err.message);
+}
+
+// ---------- MQTT ----------
+function connectMqtt() {
+  const broker = $("brokerInput").value.trim() || "wss://broker.hivemq.com:8884/mqtt";
+  setStatus("warn", "connecting to broker…");
+  client = mqtt.connect(broker, {
+    clean: true, connectTimeout: 8000, reconnectPeriod: 4000,
+    clientId: "car-web-" + channel + "-" + Math.floor(Math.random() * 100000)
+  });
+  client.on("connect", () => setStatus("good", "live on “" + channel + "”"));
+  client.on("error", () => setStatus("crit", "broker error — retrying"));
+  client.on("offline", () => setStatus("crit", "broker offline — retrying"));
+}
+
+// ---------- tick: publish + CSV-buffer one sample ----------
+function tick() {
+  const now = Date.now();
+  const fix = !!(lastPosition && now - lastPosition.t < 5000);
+  const ax = accel[0], ay = accel[1], az = accel[2];
+  const g = Math.sqrt(ax * ax + ay * ay + az * az) / 9.80665;
+  const spdKmh = fix && lastPosition.spd != null ? lastPosition.spd * 3.6 : 0;
+
+  const sample = { t: now, ch: channel, fix };
+  if (fix) {
+    sample.lat = lastPosition.lat;
+    sample.lon = lastPosition.lon;
+    if (lastPosition.alt != null) sample.alt = lastPosition.alt;
+    sample.spd = round2(spdKmh);
+    if (lastPosition.brg != null) sample.brg = lastPosition.brg;
+    sample.hacc = lastPosition.hacc;
+  }
+  sample.ax = round3(ax); sample.ay = round3(ay); sample.az = round3(az);
+  sample.g = round3(g);
+  sample.lin = haveLinearAccel;
+
+  rows.push([
+    now, new Date(now).toISOString(),
+    fix ? lastPosition.lat : "",
+    fix ? lastPosition.lon : "",
+    fix && lastPosition.alt != null ? lastPosition.alt.toFixed(1) : "",
+    spdKmh.toFixed(2),
+    fix && lastPosition.brg != null ? lastPosition.brg.toFixed(1) : "",
+    fix ? lastPosition.hacc.toFixed(1) : "",
+    ax.toFixed(3), ay.toFixed(3), az.toFixed(3), g.toFixed(3)
+  ].join(","));
+
+  if (client && client.connected) {
+    client.publish(TOPIC_PREFIX + channel, JSON.stringify(sample), { qos: 0, retain: true });
+    samplesSent++;
+  }
+
+  $("hudSpeed").textContent = fix ? Math.round(spdKmh) : "–";
+  $("hudFix").textContent = fix ? "fix" : "no fix";
+  $("hudAcc").textContent = fix ? "± " + Math.round(lastPosition.hacc) + " m" : "";
+  $("hudG").textContent = g.toFixed(2) + " g";
+  $("hudSent").textContent = samplesSent + " sent · " + rows.length + " logged";
+  $("downloadBtn").disabled = rows.length === 0;
+}
+
+// ---------- start/stop ----------
+async function start() {
+  channel = normalizeChannel($("chInput").value) || loadChannel();
+  localStorage.setItem(CH_KEY, channel);
+  $("chInput").value = channel;
+  updateViewerLink();
+  const intervalMs = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
+
+  if (!navigator.geolocation) { alert("This browser doesn't support Geolocation."); return; }
+
+  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+    try {
+      const res = await DeviceMotionEvent.requestPermission();
+      if (res !== "granted") alert("Motion permission denied — G-force will read 0.");
+    } catch (e) { /* not iOS, or already granted */ }
+  }
+  window.addEventListener("devicemotion", onMotion);
+  accel = [0, 0, 0]; haveLinearAccel = false; lastPosition = null;
+
+  watchId = navigator.geolocation.watchPosition(onPosition, onPositionError,
+    { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 });
+
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* not supported/denied */ }
+
+  rows = []; samplesSent = 0;
+  running = true;
+  connectMqtt();
+  tickTimer = setInterval(tick, intervalMs);
+
+  $("startStopBtn").textContent = "Stop logging";
+  $("startStopBtn").className = "startBtn stop";
+  $("chInput").disabled = true;
+}
+
+function stop() {
+  running = false;
+  if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  window.removeEventListener("devicemotion", onMotion);
+  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  if (client) { try { client.end(true); } catch (e) {} client = null; }
+  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  setStatus("", "stopped");
+  $("startStopBtn").textContent = "Start logging";
+  $("startStopBtn").className = "startBtn primary";
+  $("chInput").disabled = false;
+}
+
+document.addEventListener("visibilitychange", async () => {
+  if (running && document.visibilityState === "visible" && !wakeLock) {
+    try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  }
+});
+
+// ---------- CSV download ----------
+function downloadCsv() {
+  if (!rows.length) return;
+  const header = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total\n";
+  const blob = new Blob([header + rows.join("\n") + "\n"], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "telemetry-" + new Date().toISOString().replace(/[:.]/g, "-") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ---------- wiring ----------
+$("newChBtn").onclick = () => {
+  if (running) return;
+  channel = randomChannel();
+  localStorage.setItem(CH_KEY, channel);
+  $("chInput").value = channel;
+  updateViewerLink();
+};
+$("chInput").oninput = () => updateViewerLink();
+$("startStopBtn").onclick = () => { running ? stop() : start(); };
+$("downloadBtn").onclick = downloadCsv;
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {});
+</script>
+</body>
+</html>
