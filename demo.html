@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CarTelemetry Demo</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:          #f9f9f7;
+    --surface-1:     #fcfcfb;
+    --text-primary:  #0b0b0b;
+    --text-secondary:#52514e;
+    --muted:         #898781;
+    --grid:          #e1e0d9;
+    --baseline:      #c3c2b7;
+    --border:        rgba(11,11,11,0.10);
+    --series-1:      #2a78d6;
+    --series-2:      #eb6834;
+    --status-good:   #0ca30c;
+    --status-warn:   #fab219;
+    --status-crit:   #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page:          #0d0d0d;
+      --surface-1:     #1a1a19;
+      --text-primary:  #ffffff;
+      --text-secondary:#c3c2b7;
+      --muted:         #898781;
+      --grid:          #2c2c2a;
+      --baseline:      #383835;
+      --border:        rgba(255,255,255,0.10);
+      --series-1:      #3987e5;
+      --series-2:      #d95926;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:          #0d0d0d;
+    --surface-1:     #1a1a19;
+    --text-primary:  #ffffff;
+    --text-secondary:#c3c2b7;
+    --muted:         #898781;
+    --grid:          #2c2c2a;
+    --baseline:      #383835;
+    --border:        rgba(255,255,255,0.10);
+    --series-1:      #3987e5;
+    --series-2:      #d95926;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 17px; margin: 0; flex: 1 1 auto; }
+  input, button, select {
+    font: inherit;
+    color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--baseline);
+    border-radius: 8px;
+    padding: 9px 11px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
+  button.stop { background: var(--status-crit); color: #fff; border-color: transparent; }
+  button:disabled { opacity: 0.5; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border);
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill.good .dot { background: var(--status-good); }
+  .pill.warn .dot { background: var(--status-warn); }
+  .pill.crit .dot { background: var(--status-crit); }
+
+  main { padding: 16px; max-width: 560px; margin: 0 auto 60px; }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .row label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .row input[type=text] { flex: 1 1 auto; min-width: 0; }
+
+  .startBtn { display: block; width: 100%; padding: 18px; font-size: 19px; font-weight: 650;
+    border-radius: 14px; margin: 4px 0 16px; }
+
+  .phaseBar { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary); }
+  .phaseBar b { color: var(--text-primary); }
+  .progressTrack { height: 6px; border-radius: 3px; background: var(--grid); margin-top: 8px; overflow: hidden; }
+  .progressFill { height: 100%; width: 0%; background: var(--series-1); border-radius: 3px; transition: width 0.2s linear; }
+
+  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; min-width: 0; }
+  .tile.hero { grid-column: span 2; text-align: center; }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .tile .value { font-size: 22px; font-weight: 650; }
+  .tile.hero .value { font-size: 44px; line-height: 1.05; }
+  .tile .unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .actions button, .actions a { flex: 1 1 auto; text-align: center; text-decoration: none; }
+
+  details { margin-top: 14px; color: var(--text-secondary); }
+  details summary { cursor: pointer; padding: 6px 0; }
+  .adv-row { margin: 10px 0; }
+  .adv-row label { display: block; font-size: 12px; margin-bottom: 4px; }
+  .adv-row input, .adv-row select { width: 100%; }
+
+  .note { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CarTelemetry Demo</h1>
+  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">stopped</span></span>
+</header>
+
+<main>
+  <div class="row">
+    <label for="chInput">channel</label>
+    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <button id="newChBtn" title="Generate a new random demo channel id">🎲</button>
+  </div>
+
+  <button id="startStopBtn" class="startBtn primary">Start demo lap</button>
+
+  <div class="phaseBar">
+    <span id="phaseText">Parked, engine off</span> — <span id="distText">0.0 / 20.7 km</span>
+    <div class="progressTrack"><div class="progressFill" id="progressFill"></div></div>
+  </div>
+
+  <div class="hud">
+    <div class="tile hero">
+      <div class="label">Speed</div>
+      <div class="value"><span id="hudSpeed">0</span> <span class="unit">km/h</span></div>
+    </div>
+    <div class="tile"><div class="label">Lateral G (from track curvature)</div><div class="value" id="hudLatG">–</div></div>
+    <div class="tile"><div class="label">Total G</div><div class="value" id="hudG">–</div></div>
+    <div class="tile" style="grid-column: span 2;"><div class="label">Published this run</div><div class="value" id="hudSent">0 samples</div></div>
+  </div>
+
+  <div class="actions">
+    <a id="viewerLink" href="index.html" target="_blank" rel="noopener">Open live viewer</a>
+    <button id="downloadBtn" disabled>Download CSV</button>
+  </div>
+
+  <details>
+    <summary>Advanced</summary>
+    <div class="adv-row">
+      <label for="speedMult">playback speed (real lap is ~12.5 min at 100 km/h)</label>
+      <select id="speedMult">
+        <option value="1">1× — real time (~12.5 min/lap)</option>
+        <option value="2">2× (~6.3 min/lap)</option>
+        <option value="4" selected>4× (~3.1 min/lap)</option>
+        <option value="8">8× (~1.6 min/lap)</option>
+      </select>
+    </div>
+    <div class="adv-row">
+      <label for="brokerInput">MQTT broker (WebSocket)</label>
+      <input id="brokerInput" type="text" value="wss://broker.hivemq.com:8884/mqtt">
+    </div>
+  </details>
+
+  <p class="note">
+    Not a real drive — a simulation. Starts parked at the track's start/finish point, ramps up to a
+    constant <b>100 km/h</b> for the entire lap (there's no way to actually hold that everywhere on
+    the Nordschleife — sharp corners like the Karussell would need real braking — this is deliberately
+    unrealistic on speed so you can see the whole layout, HUD and Forward view at one steady pace),
+    then ramps back down and parks again, looping until you hit Stop. Speed is fixed and synthetic;
+    <b>lateral G is estimated from the real track's curvature</b> at that constant speed (smoothed over
+    ~40m, clamped to ±3g) — so corners really do read as harder or softer relative to each other, it's
+    just not measured from an accelerometer. No elevation data for this route, so vertical G reads 0.
+    Publishes to the same MQTT channel/schema as <a href="logger.html">the real logger</a>, so
+    <a href="index.html">the viewer</a> can't tell the difference — open it in another tab/device to watch.
+  </p>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+"use strict";
+
+const TOPIC_PREFIX = "cartelemetry/v1/";
+const ROUTE_URL = "routes/nordschleife.gpx";
+const CH_KEY = "cartelemetry_demo_channel_v1";
+const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+const $ = id => document.getElementById(id);
+
+const V_KMH = 100;                 // fixed cruise speed, per the ask
+const V_MS = V_KMH / 3.6;
+const ACCEL_TIME_S = 8;            // 0 -> V ramp leaving the "parking lot"
+const DECEL_TIME_S = 8;            // V -> 0 ramp back into it
+const PARK_PAUSE_S = 4;            // stationary between laps
+const ACCEL_MS2 = V_MS / ACCEL_TIME_S;
+const TICK_MS = 250;
+const CURVATURE_WINDOW_IDX = 2;    // ~40m each side at this route's ~19m avg point spacing
+const LAT_G_CLAMP_MS2 = 3 * 9.80665;
+
+function randomChannel() {
+  const arr = new Uint32Array(6);
+  crypto.getRandomValues(arr);
+  let id = "demo-";
+  for (let i = 0; i < 6; i++) id += ALPHABET[arr[i] % ALPHABET.length];
+  return id;
+}
+function loadChannel() {
+  let id = localStorage.getItem(CH_KEY);
+  if (!id) { id = randomChannel(); localStorage.setItem(CH_KEY, id); }
+  return id;
+}
+function normalizeChannel(raw) {
+  return (raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+}
+
+let channel = loadChannel();
+$("chInput").value = channel;
+updateViewerLink();
+
+function setStatus(kind, text) {
+  $("statusPill").className = "pill " + kind;
+  $("statusText").textContent = text;
+}
+function updateViewerLink() {
+  $("viewerLink").href = "index.html?ch=" + encodeURIComponent(channel);
+}
+function round2(v) { return Math.round(v * 100) / 100; }
+function round3(v) { return Math.round(v * 1000) / 1000; }
+
+// ---------- route + curvature model ----------
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000, toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function bearingDeg(a, b) {
+  const p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
+  const dl = (b.lon - a.lon) * Math.PI / 180;
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+function angDiffDeg(a, b) { let d = (b - a) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; }
+
+function parseGpx(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  return Array.from(doc.getElementsByTagName("trkpt")).map(el => ({
+    lat: parseFloat(el.getAttribute("lat")),
+    lon: parseFloat(el.getAttribute("lon"))
+  }));
+}
+
+// Builds, once: cumulative distance, per-point heading, and a signed
+// curvature (1/turn-radius, smoothed over CURVATURE_WINDOW_IDX points each
+// side) derived from the real track geometry -- this is what makes the
+// lateral-G readout track actual corners instead of being a flat line.
+function buildSimRoute(rawPoints) {
+  const points = rawPoints.filter(p => !isNaN(p.lat) && !isNaN(p.lon));
+  const n = points.length;
+  const idx = i => ((i % n) + n) % n;
+  let dist = 0;
+  points[0].distM = 0;
+  for (let i = 1; i < n; i++) {
+    dist += haversineM(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
+    points[i].distM = dist;
+  }
+  const totalDistM = points[n - 1].distM;
+  const heading = new Array(n);
+  for (let i = 0; i < n; i++) heading[i] = bearingDeg(points[idx(i - 1)], points[idx(i + 1)]);
+  const curvature = new Array(n); // 1/m, signed
+  const K = CURVATURE_WINDOW_IDX;
+  for (let i = 0; i < n; i++) {
+    const dHead = angDiffDeg(heading[idx(i - K)], heading[idx(i + K)]) * Math.PI / 180;
+    let windowDist = 0;
+    for (let j = -K; j < K; j++) {
+      const a = points[idx(i + j)], b = points[idx(i + j + 1)];
+      windowDist += haversineM(a.lat, a.lon, b.lat, b.lon);
+    }
+    curvature[i] = windowDist > 1 ? dHead / windowDist : 0;
+  }
+  return { points, heading, curvature, totalDistM };
+}
+
+// Given distance travelled along the loop, interpolate position/heading/curvature.
+function sampleAtDistance(sim, d) {
+  const { points, heading, curvature, totalDistM } = sim;
+  const n = points.length;
+  d = ((d % totalDistM) + totalDistM) % totalDistM;
+  // advance a cursor that stays close to the last lookup (called with
+  // monotonically-ish increasing d every tick, so this is usually O(1))
+  let i = sim._cursor || 0;
+  if (points[i].distM > d) i = 0;
+  while (i < n - 1 && points[i + 1].distM <= d) i++;
+  sim._cursor = i;
+  const a = points[i], b = points[(i + 1) % n];
+  const span = Math.max(b.distM - a.distM, 0.0001);
+  const t = Math.min(Math.max((d - a.distM) / span, 0), 1);
+  return {
+    lat: a.lat + (b.lat - a.lat) * t,
+    lon: a.lon + (b.lon - a.lon) * t,
+    heading: heading[i],
+    curvature: curvature[i]
+  };
+}
+
+// ---------- drive phase state machine ----------
+// One cycle = park -> accelerate -> cruise at V_KMH -> decelerate -> (loops)
+function cycleTimings(totalDistM) {
+  const accelDist = 0.5 * ACCEL_MS2 * ACCEL_TIME_S * ACCEL_TIME_S;
+  const decelDist = accelDist;
+  const cruiseDist = Math.max(totalDistM - accelDist - decelDist, 0);
+  const cruiseTime = cruiseDist / V_MS;
+  return {
+    parkEnd: PARK_PAUSE_S,
+    accelEnd: PARK_PAUSE_S + ACCEL_TIME_S,
+    cruiseEnd: PARK_PAUSE_S + ACCEL_TIME_S + cruiseTime,
+    decelEnd: PARK_PAUSE_S + ACCEL_TIME_S + cruiseTime + DECEL_TIME_S,
+    accelDist, decelDist, cruiseDist
+  };
+}
+function stateAtElapsed(t, timing) {
+  if (t < timing.parkEnd) return { phase: "parked", dist: 0, speedMs: 0 };
+  if (t < timing.accelEnd) {
+    const dt = t - timing.parkEnd;
+    return { phase: "accelerating", dist: 0.5 * ACCEL_MS2 * dt * dt, speedMs: ACCEL_MS2 * dt };
+  }
+  if (t < timing.cruiseEnd) {
+    const dt = t - timing.accelEnd;
+    return { phase: "cruising at 100 km/h", dist: timing.accelDist + V_MS * dt, speedMs: V_MS };
+  }
+  if (t < timing.decelEnd) {
+    const dt = t - timing.cruiseEnd;
+    const speedMs = Math.max(V_MS - ACCEL_MS2 * dt, 0);
+    const dist = timing.accelDist + timing.cruiseDist + (V_MS * dt - 0.5 * ACCEL_MS2 * dt * dt);
+    return { phase: "decelerating back to the lot", dist, speedMs };
+  }
+  return { phase: "parked", dist: timing.accelDist + timing.cruiseDist + timing.decelDist, speedMs: 0 };
+}
+
+// ---------- state ----------
+let running = false;
+let client = null;
+let tickTimer = null;
+let lastTickAt = 0;
+let simElapsedS = 0;
+let samplesSent = 0;
+let rows = [];
+let sim = null, timing = null, cycleTotalS = 0;
+let loadError = null;
+
+(async () => {
+  try {
+    const res = await fetch(ROUTE_URL);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    sim = buildSimRoute(parseGpx(await res.text()));
+    timing = cycleTimings(sim.totalDistM);
+    cycleTotalS = timing.decelEnd + 0.001;
+    $("distText").textContent = "0.0 / " + (sim.totalDistM / 1000).toFixed(1) + " km";
+    $("startStopBtn").disabled = false;
+  } catch (e) {
+    loadError = e;
+    setStatus("crit", "couldn't load the route — reload the page");
+    $("startStopBtn").disabled = true;
+  }
+})();
+$("startStopBtn").disabled = true; // enabled once the route above finishes loading
+
+// ---------- MQTT ----------
+function connectMqtt() {
+  const broker = $("brokerInput").value.trim() || "wss://broker.hivemq.com:8884/mqtt";
+  setStatus("warn", "connecting to broker…");
+  client = mqtt.connect(broker, {
+    clean: true, connectTimeout: 8000, reconnectPeriod: 4000,
+    clientId: "demo-" + channel + "-" + Math.floor(Math.random() * 100000)
+  });
+  client.on("connect", () => setStatus("good", "demo live on “" + channel + "”"));
+  client.on("error", () => setStatus("crit", "broker error — retrying"));
+  client.on("offline", () => setStatus("crit", "broker offline — retrying"));
+}
+
+// ---------- tick ----------
+function tick() {
+  const now = Date.now();
+  const realDtS = lastTickAt ? (now - lastTickAt) / 1000 : TICK_MS / 1000;
+  lastTickAt = now;
+  const mult = parseFloat($("speedMult").value) || 1;
+  simElapsedS = (simElapsedS + realDtS * mult) % cycleTotalS;
+
+  const st = stateAtElapsed(simElapsedS, timing);
+  const pos = sampleAtDistance(sim, st.dist);
+  const speedKmh = st.speedMs * 3.6;
+
+  const isCruise = st.phase.startsWith("cruising");
+  const latMs2 = isCruise ? Math.max(-LAT_G_CLAMP_MS2, Math.min(LAT_G_CLAMP_MS2, st.speedMs * st.speedMs * pos.curvature)) : 0;
+  const longMs2 = st.phase === "accelerating" ? ACCEL_MS2 : (st.phase.startsWith("decelerating") ? -ACCEL_MS2 : 0);
+  const ax = latMs2, ay = longMs2, az = 0;
+  const g = Math.sqrt(ax * ax + ay * ay + az * az) / 9.80665;
+  const hacc = round2(4 + Math.random() * 3);
+
+  const sample = {
+    t: now, ch: channel, fix: true,
+    lat: pos.lat, lon: pos.lon,
+    spd: round2(speedKmh), brg: pos.heading, hacc,
+    ax: round3(ax), ay: round3(ay), az: round3(az), g: round3(g), lin: true
+  };
+
+  rows.push([
+    now, new Date(now).toISOString(), pos.lat, pos.lon, "",
+    speedKmh.toFixed(2), pos.heading.toFixed(1), hacc.toFixed(1),
+    ax.toFixed(3), ay.toFixed(3), az.toFixed(3), g.toFixed(3)
+  ].join(","));
+
+  if (client && client.connected) {
+    client.publish(TOPIC_PREFIX + channel, JSON.stringify(sample), { qos: 0, retain: true });
+    samplesSent++;
+  }
+
+  $("phaseText").textContent = st.phase[0].toUpperCase() + st.phase.slice(1);
+  $("distText").textContent = (st.dist / 1000).toFixed(1) + " / " + (sim.totalDistM / 1000).toFixed(1) + " km";
+  $("progressFill").style.width = Math.min(100, (st.dist / sim.totalDistM) * 100) + "%";
+  $("hudSpeed").textContent = Math.round(speedKmh);
+  $("hudLatG").textContent = (latMs2 / 9.80665).toFixed(2) + " g";
+  $("hudG").textContent = g.toFixed(2) + " g";
+  $("hudSent").textContent = samplesSent + " sent · " + rows.length + " logged";
+  $("downloadBtn").disabled = rows.length === 0;
+}
+
+// ---------- start/stop ----------
+function start() {
+  if (!sim) return;
+  channel = normalizeChannel($("chInput").value) || loadChannel();
+  localStorage.setItem(CH_KEY, channel);
+  $("chInput").value = channel;
+  updateViewerLink();
+
+  simElapsedS = 0; lastTickAt = 0; rows = []; samplesSent = 0;
+  running = true;
+  connectMqtt();
+  tickTimer = setInterval(tick, TICK_MS);
+
+  $("startStopBtn").textContent = "Stop demo";
+  $("startStopBtn").className = "startBtn stop";
+  $("chInput").disabled = true;
+}
+
+function stop() {
+  running = false;
+  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  if (client) { try { client.end(true); } catch (e) {} client = null; }
+  setStatus("", "stopped");
+  $("startStopBtn").textContent = "Start demo lap";
+  $("startStopBtn").className = "startBtn primary";
+  $("chInput").disabled = false;
+  $("phaseText").textContent = "Parked, engine off";
+}
+
+// ---------- CSV download ----------
+function downloadCsv() {
+  if (!rows.length) return;
+  const header = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total\n";
+  const blob = new Blob([header + rows.join("\n") + "\n"], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "demo-lap-" + new Date().toISOString().replace(/[:.]/g, "-") + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ---------- wiring ----------
+$("newChBtn").onclick = () => {
+  if (running) return;
+  channel = randomChannel();
+  localStorage.setItem(CH_KEY, channel);
+  $("chInput").value = channel;
+  updateViewerLink();
+};
+$("chInput").oninput = () => updateViewerLink();
+$("startStopBtn").onclick = () => { running ? stop() : start(); };
+$("downloadBtn").onclick = downloadCsv;
+</script>
+</body>
+</html>
