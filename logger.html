@@ -199,6 +199,7 @@
     <div class="line"><span class="k">Uploaded to cloud</span><span class="v" id="stUploaded">0</span></div>
     <div class="line"><span class="k">Waiting to upload</span><span class="v" id="stPending">0</span></div>
     <div class="line"><span class="k">Storage</span><span class="v" id="stPersist">–</span></div>
+    <div class="line"><span class="k">Sampling</span><span class="v" id="stGaps">–</span></div>
   </div>
 
   <div class="actions">
@@ -312,6 +313,11 @@ function onPosition(pos) {
   const c = pos.coords;
   lastPosition = { lat:c.latitude, lon:c.longitude, alt:c.altitude, spd:c.speed,
                    brg:c.heading, hacc:c.accuracy, t:Date.now() };
+  // Record straight off the GPS callback as well as off the timer. Real
+  // driving showed ~32% of a session missing because backgrounded/dimmed
+  // pages get their setInterval throttled hard, while the geolocation
+  // service keeps delivering fixes. Whichever fires, we capture.
+  if (running) recordSample("gps");
 }
 const onPositionError = err => setStatus("crit", "GPS: " + err.message);
 
@@ -395,9 +401,31 @@ function connectMqtt() {
   client.on("offline", () => setStatus("warn", "broker offline — still recording"));
 }
 
-// ---------- tick ----------
-function tick() {
+// ---------- sampling ----------
+// Driven from two independent sources -- the interval timer and the GPS
+// callback -- so throttling one doesn't create a hole. `minGapMs` stops the
+// two from double-writing the same instant.
+let lastSampleAt = 0;
+let intervalMs = 1000;
+
+let gapCount = 0, worstGapMs = 0;
+
+function recordSample(source) {
   const now = Date.now();
+  const minGapMs = Math.min(intervalMs, 1000) * 0.5;
+  if (now - lastSampleAt < minGapMs) return;
+  // A gap means the page was throttled (backgrounded / screen off) and real
+  // seconds went unrecorded. Count it so it's visible rather than silent.
+  if (lastSampleAt && now - lastSampleAt > intervalMs * 2.5) {
+    gapCount++;
+    worstGapMs = Math.max(worstGapMs, now - lastSampleAt);
+  }
+  lastSampleAt = now;
+  tick(now);
+}
+
+function tick(nowArg) {
+  const now = nowArg || Date.now();
   const fix = !!(lastPosition && now - lastPosition.t < 5000);
   const ax = accel[0], ay = accel[1], az = accel[2];
   const g = Math.sqrt(ax*ax + ay*ay + az*az) / 9.80665;
@@ -457,6 +485,10 @@ function refreshCounters() {
   $("stUploaded").className = "v " + (pendingCount <= 0 && savedCount > 0 ? "ok" : "");
   $("stPending").className = "v " + (pendingCount > 0 ? "warn" : "");
   $("downloadBtn").disabled = savedCount === 0;
+  $("stGaps").textContent = gapCount
+    ? gapCount + " gap" + (gapCount > 1 ? "s" : "") + " (worst " + (worstGapMs/1000).toFixed(0) + "s)"
+    : "continuous";
+  $("stGaps").className = "v " + (gapCount ? "warn" : "ok");
   const cloudOn = $("cloudToggle").checked;
   $("recSub").textContent =
     !cloudOn                       ? "saved on device · cloud upload off" :
@@ -505,11 +537,13 @@ async function beginLogging(fromGesture) {
 
   run = await CT.createRun({ channel, source: "browser" });
   savedCount = uploadedCount = pendingCount = 0;
+  gapCount = 0; worstGapMs = 0;
   running = true;
 
   connectMqtt();
-  const ms = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
-  tickTimer = setInterval(tick, ms);
+  intervalMs = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
+  lastSampleAt = 0;
+  tickTimer = setInterval(() => recordSample("timer"), intervalMs);
   syncTimer = setInterval(syncLoop, 5000);
   uiTimer   = setInterval(refreshCounters, 1000);
 
