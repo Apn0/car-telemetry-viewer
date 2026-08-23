@@ -1,0 +1,257 @@
+{
+ "totalDistM": 20746.1,
+ "corners": [
+  {
+   "name": "Antoniusbuche",
+   "distM": 766.9,
+   "lat": 50.3454266,
+   "lon": 6.9646876
+  },
+  {
+   "name": "Tiergarten",
+   "distM": 1564.2,
+   "lat": 50.3408439,
+   "lon": 6.9562155
+  },
+  {
+   "name": "Hohenrain",
+   "distM": 1694.7,
+   "lat": 50.3398208,
+   "lon": 6.9553238
+  },
+  {
+   "name": "T13",
+   "distM": 2093.3,
+   "lat": 50.3377306,
+   "lon": 6.9512265
+  },
+  {
+   "name": "Sabine-Schmitz-Kurve",
+   "distM": 2344.1,
+   "lat": 50.3391848,
+   "lon": 6.9486675
+  },
+  {
+   "name": "Hatzenbogen",
+   "distM": 2530.0,
+   "lat": 50.3382658,
+   "lon": 6.9470826
+  },
+  {
+   "name": "Hatzenbach",
+   "distM": 2909.4,
+   "lat": 50.3378964,
+   "lon": 6.9424368
+  },
+  {
+   "name": "Hocheichen",
+   "distM": 3622.6,
+   "lat": 50.3401914,
+   "lon": 6.9341307
+  },
+  {
+   "name": "Quiddelbacher Höhe",
+   "distM": 4102.8,
+   "lat": 50.3429788,
+   "lon": 6.9293534
+  },
+  {
+   "name": "Flugplatz",
+   "distM": 4453.1,
+   "lat": 50.3453806,
+   "lon": 6.9261688
+  },
+  {
+   "name": "Schwedenkreuz",
+   "distM": 5142.9,
+   "lat": 50.3514207,
+   "lon": 6.9267166
+  },
+  {
+   "name": "Aremberg",
+   "distM": 5967.3,
+   "lat": 50.357339,
+   "lon": 6.9206498
+  },
+  {
+   "name": "Fuchsröhre",
+   "distM": 6304.3,
+   "lat": 50.3590202,
+   "lon": 6.9229514
+  },
+  {
+   "name": "Adenauer Forst",
+   "distM": 7208.1,
+   "lat": 50.3651036,
+   "lon": 6.9303693
+  },
+  {
+   "name": "Metzgesfeld",
+   "distM": 7665.7,
+   "lat": 50.3681664,
+   "lon": 6.9333875
+  },
+  {
+   "name": "Kallenhard",
+   "distM": 8330.7,
+   "lat": 50.3730619,
+   "lon": 6.9371989
+  },
+  {
+   "name": "Spiegelkurve",
+   "distM": 8876.1,
+   "lat": 50.3756001,
+   "lon": 6.9361361
+  },
+  {
+   "name": "Dreifach-Rechts",
+   "distM": 9102.1,
+   "lat": 50.3773586,
+   "lon": 6.9375474
+  },
+  {
+   "name": "Wehrseifen",
+   "distM": 9475.8,
+   "lat": 50.3768315,
+   "lon": 6.9420539
+  },
+  {
+   "name": "Breidscheid",
+   "distM": 9800.9,
+   "lat": 50.3767773,
+   "lon": 6.9456287
+  },
+  {
+   "name": "Exmühle",
+   "distM": 10271.7,
+   "lat": 50.3780933,
+   "lon": 6.9503624
+  },
+  {
+   "name": "Lauda-Links",
+   "distM": 10798.3,
+   "lat": 50.3796526,
+   "lon": 6.9571482
+  },
+  {
+   "name": "Bergwerk",
+   "distM": 11035.3,
+   "lat": 50.3808272,
+   "lon": 6.9599129
+  },
+  {
+   "name": "Senkenlinks",
+   "distM": 11474.9,
+   "lat": 50.3776318,
+   "lon": 6.9613277
+  },
+  {
+   "name": "Kesselchen",
+   "distM": 12198.5,
+   "lat": 50.3744921,
+   "lon": 6.9690789
+  },
+  {
+   "name": "Mutkurve",
+   "distM": 12944.2,
+   "lat": 50.3723983,
+   "lon": 6.9788332
+  },
+  {
+   "name": "Klostertal",
+   "distM": 13321.9,
+   "lat": 50.3735391,
+   "lon": 6.9835504
+  },
+  {
+   "name": "Steilstrecke",
+   "distM": 13632.6,
+   "lat": 50.374476,
+   "lon": 6.9875301
+  },
+  {
+   "name": "Karussell",
+   "distM": 14136.0,
+   "lat": 50.3722049,
+   "lon": 6.9857538
+  },
+  {
+   "name": "Hohe Acht",
+   "distM": 14290.7,
+   "lat": 50.3720457,
+   "lon": 6.9865599
+  },
+  {
+   "name": "Hedwigshöhe",
+   "distM": 15464.4,
+   "lat": 50.376227,
+   "lon": 6.9988279
+  },
+  {
+   "name": "Wippermann",
+   "distM": 15573.7,
+   "lat": 50.3755608,
+   "lon": 6.9999126
+  },
+  {
+   "name": "Eschbach",
+   "distM": 15895.1,
+   "lat": 50.3739665,
+   "lon": 7.0034467
+  },
+  {
+   "name": "Brünnchen",
+   "distM": 16300.4,
+   "lat": 50.3709818,
+   "lon": 7.004288
+  },
+  {
+   "name": "Eiskurve",
+   "distM": 16819.6,
+   "lat": 50.3688122,
+   "lon": 7.002167
+  },
+  {
+   "name": "Pflanzgarten",
+   "distM": 16976.4,
+   "lat": 50.3678235,
+   "lon": 7.0008721
+  },
+  {
+   "name": "Sprunghügel",
+   "distM": 17778.6,
+   "lat": 50.3621613,
+   "lon": 6.99599
+  },
+  {
+   "name": "Stefan-Bellof-S",
+   "distM": 17996.8,
+   "lat": 50.3604988,
+   "lon": 6.9944072
+  },
+  {
+   "name": "Schwalbenschwanz",
+   "distM": 18543.8,
+   "lat": 50.3582743,
+   "lon": 6.9877574
+  },
+  {
+   "name": "Mini-Karussell",
+   "distM": 18932.8,
+   "lat": 50.3586619,
+   "lon": 6.9828239
+  },
+  {
+   "name": "Galgenkopf",
+   "distM": 19353.2,
+   "lat": 50.3564391,
+   "lon": 6.9839792
+  },
+  {
+   "name": "Döttinger Höhe",
+   "distM": 20544.1,
+   "lat": 50.3500245,
+   "lon": 6.9762865
+  }
+ ]
+}

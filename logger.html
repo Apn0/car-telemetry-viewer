@@ -4,191 +4,181 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CarTelemetry Logger</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root {
     color-scheme: light;
-    --page:          #f9f9f7;
-    --surface-1:     #fcfcfb;
-    --text-primary:  #0b0b0b;
-    --text-secondary:#52514e;
-    --muted:         #898781;
-    --grid:          #e1e0d9;
-    --baseline:      #c3c2b7;
-    --border:        rgba(11,11,11,0.10);
-    --series-1:      #2a78d6;
-    --series-2:      #eb6834;
-    --status-good:   #0ca30c;
-    --status-warn:   #fab219;
-    --status-crit:   #d03b3b;
+    --page:#f9f9f7; --surface-1:#fcfcfb; --text-primary:#0b0b0b; --text-secondary:#52514e;
+    --muted:#898781; --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+    --series-1:#2a78d6; --series-2:#eb6834;
+    --status-good:#0ca30c; --status-warn:#fab219; --status-crit:#d03b3b;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       color-scheme: dark;
-      --page:          #0d0d0d;
-      --surface-1:     #1a1a19;
-      --text-primary:  #ffffff;
-      --text-secondary:#c3c2b7;
-      --muted:         #898781;
-      --grid:          #2c2c2a;
-      --baseline:      #383835;
-      --border:        rgba(255,255,255,0.10);
-      --series-1:      #3987e5;
-      --series-2:      #d95926;
+      --page:#0d0d0d; --surface-1:#1a1a19; --text-primary:#fff; --text-secondary:#c3c2b7;
+      --muted:#898781; --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+      --series-1:#3987e5; --series-2:#d95926;
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --page:          #0d0d0d;
-    --surface-1:     #1a1a19;
-    --text-primary:  #ffffff;
-    --text-secondary:#c3c2b7;
-    --muted:         #898781;
-    --grid:          #2c2c2a;
-    --baseline:      #383835;
-    --border:        rgba(255,255,255,0.10);
-    --series-1:      #3987e5;
-    --series-2:      #d95926;
+    --page:#0d0d0d; --surface-1:#1a1a19; --text-primary:#fff; --text-secondary:#c3c2b7;
+    --muted:#898781; --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+    --series-1:#3987e5; --series-2:#d95926;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; }
   body {
-    margin: 0;
-    background: var(--page);
-    color: var(--text-primary);
+    margin: 0; background: var(--page); color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none;
   }
   header {
-    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
   }
-  header h1 { font-size: 17px; margin: 0; flex: 1 1 auto; }
+  header h1 { font-size: 15px; margin: 0; flex: 1 1 auto; }
   input, button, select {
-    font: inherit;
-    color: var(--text-primary);
-    background: var(--surface-1);
-    border: 1px solid var(--baseline);
-    border-radius: 8px;
-    padding: 9px 11px;
+    font: inherit; color: var(--text-primary); background: var(--surface-1);
+    border: 1px solid var(--baseline); border-radius: 8px; padding: 9px 11px;
   }
   button { cursor: pointer; }
   button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
   button.stop { background: var(--status-crit); color: #fff; border-color: transparent; }
-  button:disabled { opacity: 0.5; }
   .pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: 999px;
-    border: 1px solid var(--border);
-    font-size: 13px; color: var(--text-secondary);
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px;
+    border-radius: 999px; border: 1px solid var(--border);
+    font-size: 12px; color: var(--text-secondary);
   }
-  .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .pill.good .dot { background: var(--status-good); animation: pulse 2s infinite; }
   .pill.warn .dot { background: var(--status-warn); }
   .pill.crit .dot { background: var(--status-crit); }
-  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-  main { padding: 16px; max-width: 520px; margin: 0 auto 60px; }
+  main { padding: 12px; max-width: 560px; margin: 0 auto 40px; }
 
-  /* Tap-to-begin gate: only shown when the browser needs a user gesture
-     before it will hand over motion sensors (notably iOS Safari). */
   #gate {
-    position: fixed; inset: 0; z-index: 50;
-    display: none; flex-direction: column; align-items: center; justify-content: center;
-    gap: 18px; padding: 32px; text-align: center;
-    background: var(--page);
+    position: fixed; inset: 0; z-index: 50; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 32px; text-align: center; background: var(--page);
   }
   #gate.show { display: flex; }
   #gate h2 { margin: 0; font-size: 22px; }
-  #gate p { margin: 0; color: var(--text-secondary); font-size: 14px; max-width: 320px; line-height: 1.5; }
+  #gate p { margin: 0; color: var(--text-secondary); font-size: 14px; max-width: 330px; line-height: 1.5; }
   #gateBtn { padding: 22px 40px; font-size: 20px; font-weight: 650; border-radius: 16px; }
 
-  .recbar {
-    display: flex; align-items: center; gap: 10px;
+  /* --- corner callout: the main thing a driver looks at --- */
+  .callout {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+    border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; text-align: center;
   }
-  .recbar .rec { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
-  .recbar.live .rec { background: var(--status-crit); animation: pulse 1.4s infinite; }
-  .recbar .txt { flex: 1 1 auto; font-size: 14px; font-weight: 600; }
-  .recbar .sub { font-size: 12px; color: var(--text-secondary); font-weight: 400; }
+  .callout .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .callout .name {
+    font-size: 34px; font-weight: 750; line-height: 1.1; margin: 2px 0 4px;
+    overflow-wrap: anywhere;
+  }
+  .callout .dist { font-size: 20px; font-weight: 600; color: var(--series-2); font-variant-numeric: tabular-nums; }
+  .callout.near { border-color: var(--series-2); }
+  /* GPS dropped: keep the last corner visible for context but make it
+     obvious the reading is no longer live. */
+  .callout.stale .name, .callout.stale .after { opacity: .35; }
+  .callout .after { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-  .row label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
-  .row input[type=text] { flex: 1 1 120px; min-width: 0; }
+  #fwCanvas { width: 100%; height: 220px; display: block; border-radius: 12px;
+    background: var(--surface-1); border: 1px solid var(--border); margin-bottom: 10px; }
+  #map { height: 240px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 10px; }
 
-  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
-  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px; min-width: 0; }
+  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 10px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px; min-width: 0; }
   .tile.hero { grid-column: span 2; text-align: center; }
-  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
-  .tile .value { font-size: 22px; font-weight: 650; }
-  .tile.hero .value { font-size: 46px; line-height: 1.05; }
+  .tile .label { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+  .tile .value { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile.hero .value { font-size: 52px; line-height: 1.05; }
   .tile .unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
 
-  .storebox {
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px;
+  .recbar {
+    display: flex; align-items: center; gap: 10px; background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px;
   }
-  .storebox .line { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  .recbar .rec { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); flex: none; }
+  .recbar.live .rec { background: var(--status-crit); animation: pulse 1.4s infinite; }
+  .recbar .txt { flex: 1 1 auto; font-size: 13px; font-weight: 600; }
+  .recbar .sub { font-size: 11px; color: var(--text-secondary); font-weight: 400; }
+
+  .toggles { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .toggles button { flex: 1 1 auto; font-size: 13px; padding: 10px 8px; }
+  .toggles button.on { background: var(--series-1); color: #fff; border-color: transparent; }
+
+  .storebox { background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .storebox .line { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
   .storebox .k { color: var(--text-secondary); }
   .storebox .v { font-variant-numeric: tabular-nums; font-weight: 600; }
-  .storebox .v.ok   { color: var(--status-good); }
+  .storebox .v.ok { color: var(--status-good); }
   .storebox .v.warn { color: var(--status-warn); }
 
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .row label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+  .row input[type=text] { flex: 1 1 110px; min-width: 0; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .actions button, .actions a {
-    flex: 1 1 auto; text-align: center; text-decoration: none;
-    padding: 12px; border-radius: 10px; border: 1px solid var(--baseline);
+    flex: 1 1 auto; text-align: center; text-decoration: none; padding: 12px;
+    border-radius: 10px; border: 1px solid var(--baseline);
     background: var(--surface-1); color: var(--text-primary); font: inherit;
   }
   #stopBtn { flex-basis: 100%; }
 
-  .runlist { margin-top: 6px; }
-  .runrow {
-    display: flex; align-items: center; gap: 10px; padding: 9px 0;
-    border-bottom: 1px solid var(--grid); font-size: 13px;
-  }
+  .runrow { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid var(--grid); font-size: 13px; }
   .runrow:last-child { border-bottom: none; }
   .runrow .meta { flex: 1 1 auto; min-width: 0; }
-  .runrow .when { font-weight: 600; }
-  .runrow .det { font-size: 12px; color: var(--muted); }
+  .runrow .det { font-size: 11px; color: var(--muted); }
   .runrow button { padding: 6px 10px; font-size: 12px; }
 
-  details { margin-top: 14px; color: var(--text-secondary); }
+  details { margin-top: 12px; color: var(--text-secondary); }
   details summary { cursor: pointer; padding: 6px 0; }
   .adv-row { margin: 10px 0; }
   .adv-row label { display: block; font-size: 12px; margin-bottom: 4px; }
   .adv-row input, .adv-row select { width: 100%; }
-
-  .note { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
 </style>
 </head>
 <body>
 
 <div id="gate">
   <h2>Ready to log</h2>
-  <p id="gateMsg">Tap below to allow location and motion access. Logging starts immediately and keeps running until you stop it.</p>
-  <button id="gateBtn" class="primary">Tap to start logging</button>
+  <p>Tap to allow location, motion and audio. Recording starts immediately and
+     the corner callouts begin as soon as you're moving.</p>
+  <button id="gateBtn" class="primary">Tap to start</button>
 </div>
 
 <header>
-  <h1>CarTelemetry Logger</h1>
+  <h1>CarTelemetry</h1>
   <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">starting…</span></span>
 </header>
 
 <main>
-  <div class="recbar" id="recbar">
-    <span class="rec"></span>
-    <span class="txt"><span id="recText">Starting…</span><br><span class="sub" id="recSub">&nbsp;</span></span>
+  <div class="callout" id="callout">
+    <div class="lbl">Next corner</div>
+    <div class="name" id="coName">–</div>
+    <div class="dist" id="coDist">waiting for GPS</div>
+    <div class="after" id="coAfter"></div>
   </div>
 
-  <div class="row">
-    <label for="labelInput">device</label>
-    <input id="labelInput" type="text" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false">
-    <label for="chInput">channel</label>
-    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+  <canvas id="fwCanvas" width="900" height="220"></canvas>
+
+  <div class="toggles">
+    <button id="voiceBtn">🔊 Voice: off</button>
+    <button id="mapBtn">🗺 Map: on</button>
   </div>
+
+  <div id="map"></div>
 
   <div class="hud">
     <div class="tile hero">
@@ -197,6 +187,11 @@
     </div>
     <div class="tile"><div class="label">GPS</div><div class="value" id="hudFix">–</div><div class="label" id="hudAcc"></div></div>
     <div class="tile"><div class="label">G-force</div><div class="value" id="hudG">–</div></div>
+  </div>
+
+  <div class="recbar" id="recbar">
+    <span class="rec"></span>
+    <span class="txt"><span id="recText">Starting…</span><br><span class="sub" id="recSub">&nbsp;</span></span>
   </div>
 
   <div class="storebox">
@@ -212,9 +207,16 @@
     <button id="downloadBtn" disabled>Download CSV</button>
   </div>
 
+  <div class="row">
+    <label for="labelInput">device</label>
+    <input id="labelInput" type="text" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false">
+    <label for="chInput">channel</label>
+    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+  </div>
+
   <details id="runsBox">
     <summary>Past runs on this device (<span id="runsCount">0</span>)</summary>
-    <div class="runlist" id="runList"></div>
+    <div id="runList"></div>
   </details>
 
   <details>
@@ -230,40 +232,42 @@
     <div class="adv-row">
       <label><input type="checkbox" id="cloudToggle" checked style="width:auto"> upload runs to cloud storage</label>
     </div>
+    <div class="adv-row" id="routeInfo" style="font-size:12px"></div>
   </details>
 
-  <p class="note" id="footNote">
-    Logging starts on its own when this page opens and every sample is written to this
-    device immediately, so nothing is lost if you close the tab, reload, lose signal or
-    the browser crashes — the run is picked up again next time you open the page.
-    Samples upload to cloud storage in the background whenever there's a connection,
-    and anything queued while you're out of coverage is sent once you're back.
-    <b>The screen still has to stay on with this tab in front while logging</b> —
-    browsers don't get background GPS the way a native app does.
-    <a href="demo.html">No car handy? Watch a synthetic demo lap →</a>
+  <p class="note">
+    Corner names and positions come from the same OpenStreetMap data as the track
+    itself, so the callouts are real circuit data. Recording starts on its own and
+    every sample is written to this device before it's uploaded, so nothing is lost
+    to a closed tab, a reload, a crash or a stretch with no coverage.
+    <b>The screen has to stay on with this tab in front</b> — browsers don't get
+    background GPS the way a native app does.
+    <a href="demo.html">No car handy? Watch a demo lap →</a>
   </p>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="storage.js"></script>
+<script src="route.js"></script>
+<script src="corners.js"></script>
 <script>
 "use strict";
 
 const TOPIC_PREFIX = "cartelemetry/v1/";
 const CH_KEY = "cartelemetry_channel_v1";
+const VOICE_KEY = "cartelemetry_voice_v1";
+const MAP_KEY = "cartelemetry_map_v1";
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const $ = id => document.getElementById(id);
 
 function randomChannel() {
-  const arr = new Uint32Array(8);
-  crypto.getRandomValues(arr);
-  let id = "";
-  for (let i = 0; i < 8; i++) id += ALPHABET[arr[i] % ALPHABET.length];
-  return id;
+  const a = new Uint32Array(8); crypto.getRandomValues(a);
+  let s = ""; for (let i = 0; i < 8; i++) s += ALPHABET[a[i] % ALPHABET.length];
+  return s;
 }
-function normalizeChannel(raw) {
-  return (raw || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-}
+const normalizeChannel = r => (r || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
 function loadChannel() {
   let id = localStorage.getItem(CH_KEY);
   if (!id) { id = randomChannel(); localStorage.setItem(CH_KEY, id); }
@@ -271,100 +275,146 @@ function loadChannel() {
 }
 
 // ---------- state ----------
-let running = false;
-let client = null;
-let watchId = null;
-let wakeLock = null;
+let running = false, client = null, watchId = null, wakeLock = null;
 let tickTimer = null, syncTimer = null, uiTimer = null;
-let lastPosition = null;
-let accel = [0, 0, 0];
-let haveLinearAccel = false;
-let run = null;              // current CT run record
-let savedCount = 0, uploadedCount = 0, pendingCount = 0;
-let syncing = false;
-let lastSyncError = null;
+let lastPosition = null, accel = [0,0,0], haveLinearAccel = false;
+let run = null;
+let savedCount = 0, uploadedCount = 0, pendingCount = 0;   // kept in memory, not recounted every tick
+let syncing = false, lastSyncError = null;
 let channel = loadChannel();
+let mapOn = localStorage.getItem(MAP_KEY) !== "0";
+let map = null, tileLayer = null, trail = null, marker = null, routeLine = null;
+let trailPts = [];
+let lastLocate = null;
+
+const setStatus = (k, t) => { $("statusPill").className = "pill " + k; $("statusText").textContent = t; };
+const updateViewerLink = () => { $("viewerLink").href = "index.html?ch=" + encodeURIComponent(channel); };
+const round2 = v => Math.round(v * 100) / 100;
+const round3 = v => Math.round(v * 1000) / 1000;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 $("chInput").value = channel;
 $("labelInput").value = CT.deviceLabel();
 updateViewerLink();
 
-function setStatus(kind, text) {
-  $("statusPill").className = "pill " + kind;
-  $("statusText").textContent = text;
-}
-function updateViewerLink() {
-  $("viewerLink").href = "index.html?ch=" + encodeURIComponent(channel);
-}
-function round2(v) { return Math.round(v * 100) / 100; }
-function round3(v) { return Math.round(v * 1000) / 1000; }
-function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
-
 // ---------- sensors ----------
 function onMotion(e) {
-  let a = e.acceleration;
-  let lin = true;
-  if (!a || (a.x == null && a.y == null && a.z == null)) {
-    a = e.accelerationIncludingGravity;
-    lin = false;
-  }
+  let a = e.acceleration, lin = true;
+  if (!a || (a.x == null && a.y == null && a.z == null)) { a = e.accelerationIncludingGravity; lin = false; }
   if (!a) return;
   haveLinearAccel = lin;
-  accel[0] = 0.7 * accel[0] + 0.3 * (a.x || 0);
-  accel[1] = 0.7 * accel[1] + 0.3 * (a.y || 0);
-  accel[2] = 0.7 * accel[2] + 0.3 * (a.z || 0);
+  accel[0] = 0.7*accel[0] + 0.3*(a.x||0);
+  accel[1] = 0.7*accel[1] + 0.3*(a.y||0);
+  accel[2] = 0.7*accel[2] + 0.3*(a.z||0);
 }
 function onPosition(pos) {
   const c = pos.coords;
-  lastPosition = {
-    lat: c.latitude, lon: c.longitude,
-    alt: c.altitude, spd: c.speed, brg: c.heading, hacc: c.accuracy,
-    t: Date.now()
-  };
+  lastPosition = { lat:c.latitude, lon:c.longitude, alt:c.altitude, spd:c.speed,
+                   brg:c.heading, hacc:c.accuracy, t:Date.now() };
 }
-function onPositionError(err) {
-  lastSyncError = null;
-  setStatus("crit", "GPS: " + err.message);
+const onPositionError = err => setStatus("crit", "GPS: " + err.message);
+
+// ---------- map ----------
+const isDark = () => {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t === "dark") return true;
+  if (t === "light") return false;
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+};
+function makeMap() {
+  if (map || !mapOn) return;
+  map = L.map("map", { zoomControl: false, attributionControl: false }).setView([50.3357, 6.9475], 13);
+  tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/" + (isDark() ? "dark_all" : "light_all") + "/{z}/{x}/{y}{r}.png",
+    { maxZoom: 19 }).addTo(map);
+  if (CTRoute.loaded) {
+    routeLine = L.polyline(CTRoute.points.map(p => [p.lat, p.lon]),
+      { color: css("--muted"), weight: 2, opacity: .6 }).addTo(map);
+    map.fitBounds(routeLine.getBounds().pad(0.05));
+  }
+  trail  = L.polyline([], { color: css("--series-1"), weight: 4 }).addTo(map);
+  marker = L.circleMarker([0,0], { radius: 7, color: "#fff", weight: 2,
+    fillColor: css("--series-2"), fillOpacity: 1 });
 }
 
-// ---------- MQTT (live view only; storage is independent of it) ----------
+function updateMap(lat, lon) {
+  if (!map) return;
+  trailPts.push([lat, lon]);
+  if (trailPts.length > 3000) trailPts.splice(0, trailPts.length - 3000);
+  trail.setLatLngs(trailPts);
+  marker.setLatLng([lat, lon]);
+  if (!map.hasLayer(marker)) marker.addTo(map);
+  map.setView([lat, lon], Math.max(map.getZoom(), 15));
+}
+
+// ---------- HUD: corner callout + forward view ----------
+function updateGuidance(fix, speedKmh) {
+  $("callout").classList.toggle("stale", !fix);
+  if (!fix || !CTRoute.loaded) {
+    $("coDist").textContent = CTRoute.loaded ? "waiting for GPS" : "no route loaded";
+    $("callout").classList.remove("near");
+    CTRoute.drawForward($("fwCanvas"), null, 0,
+      { emptyText: CTRoute.loaded ? "waiting for a GPS fix…" : "no route loaded" });
+    return;
+  }
+  const loc = CTRoute.locate(lastPosition.lat, lastPosition.lon);
+  lastLocate = loc;
+  if (!loc) return;
+
+  // Far off the circuit (e.g. driving there): don't pretend to guide.
+  if (loc.offRouteM > 120) {
+    $("coName").textContent = "–";
+    $("coDist").textContent = "off circuit (" + Math.round(loc.offRouteM) + " m)";
+    $("coAfter").textContent = "";
+    $("callout").classList.remove("near");
+  } else {
+    const n = CTCorners.next(loc.distAlongM);
+    if (n) {
+      $("coName").textContent = n.corner.name;
+      $("coDist").textContent = Math.round(n.aheadM) + " m";
+      $("callout").classList.toggle("near", n.aheadM <= CTCorners.lookaheadM(speedKmh));
+      const after = CTCorners.next(loc.distAlongM + n.aheadM + 1);
+      $("coAfter").textContent = after ? "then " + after.corner.name : "";
+    }
+    CTCorners.maybeAnnounce(loc.distAlongM, speedKmh);
+  }
+
+  const aheadM = clamp(CTCorners.lookaheadM(speedKmh) * 1.2, 200, 600);
+  const win = CTRoute.forwardWindow(lastPosition.lat, lastPosition.lon, aheadM);
+  CTRoute.drawForward($("fwCanvas"), win, lastPosition.brg,
+    { corners: CTCorners.within(loc.distAlongM, aheadM) });
+}
+
+// ---------- MQTT ----------
 function connectMqtt() {
   const broker = $("brokerInput").value.trim() || "wss://broker.hivemq.com:8884/mqtt";
-  client = mqtt.connect(broker, {
-    clean: true, connectTimeout: 8000, reconnectPeriod: 4000,
-    clientId: "car-web-" + channel + "-" + Math.floor(Math.random() * 100000)
-  });
+  client = mqtt.connect(broker, { clean:true, connectTimeout:8000, reconnectPeriod:4000,
+    clientId: "car-web-" + channel + "-" + Math.floor(Math.random()*100000) });
   client.on("connect", () => setStatus("good", "live on “" + channel + "”"));
   client.on("error",   () => setStatus("warn", "broker unreachable — still recording"));
   client.on("offline", () => setStatus("warn", "broker offline — still recording"));
 }
 
-// ---------- tick: build a sample, persist it, then publish ----------
-async function tick() {
+// ---------- tick ----------
+function tick() {
   const now = Date.now();
   const fix = !!(lastPosition && now - lastPosition.t < 5000);
   const ax = accel[0], ay = accel[1], az = accel[2];
-  const g = Math.sqrt(ax * ax + ay * ay + az * az) / 9.80665;
+  const g = Math.sqrt(ax*ax + ay*ay + az*az) / 9.80665;
   const spdKmh = fix && lastPosition.spd != null ? lastPosition.spd * 3.6 : 0;
 
   const sample = { t: now, fix, ax: round3(ax), ay: round3(ay), az: round3(az), g: round3(g) };
   if (fix) {
-    sample.lat = lastPosition.lat;
-    sample.lon = lastPosition.lon;
+    sample.lat = lastPosition.lat; sample.lon = lastPosition.lon;
     if (lastPosition.alt != null) sample.alt = lastPosition.alt;
     sample.spd = round2(spdKmh);
     if (lastPosition.brg != null) sample.brg = lastPosition.brg;
     sample.hacc = lastPosition.hacc;
   }
 
-  // Durability first: once this resolves the sample survives a crash.
-  try {
-    await CT.addSample(run.runId, sample);
-    savedCount++;
-    pendingCount++;
-  } catch (e) {
-    setStatus("crit", "storage error: " + e.message);
-  }
+  // Buffered write; storage.js batches these into one transaction.
+  CT.addSample(run.runId, sample);
+  savedCount++; pendingCount++;
 
   if (client && client.connected) {
     client.publish(TOPIC_PREFIX + channel,
@@ -376,9 +426,12 @@ async function tick() {
   $("hudFix").textContent = fix ? "fix" : "no fix";
   $("hudAcc").textContent = fix ? "± " + Math.round(lastPosition.hacc) + " m" : "";
   $("hudG").textContent = g.toFixed(2) + " g";
+
+  updateGuidance(fix, spdKmh);
+  if (fix && mapOn) updateMap(lastPosition.lat, lastPosition.lon);
 }
 
-// ---------- background upload ----------
+// ---------- upload ----------
 async function syncLoop() {
   if (syncing || !run || !$("cloudToggle").checked) return;
   if (!navigator.onLine) { lastSyncError = "offline"; return; }
@@ -387,48 +440,37 @@ async function syncLoop() {
     let guard = 0;
     for (;;) {
       const { sent, remaining } = await CT.flushOnce(run);
-      if (sent) { uploadedCount += sent; pendingCount = remaining; }
+      if (sent) { uploadedCount += sent; pendingCount = remaining + CT.bufferedCount(); }
       lastSyncError = null;
       if (!sent || !remaining || ++guard > 20) break;
     }
-  } catch (e) {
-    lastSyncError = (e && e.message) ? e.message : String(e);
-  } finally {
-    syncing = false;
-  }
+  } catch (e) { lastSyncError = e && e.message ? e.message : String(e); }
+  finally { syncing = false; }
 }
 
-async function refreshCounters() {
-  if (!run) return;
-  try {
-    savedCount   = await CT.countSamples(run.runId);
-    pendingCount = await CT.countPending(run.runId);
-    uploadedCount = Math.max(savedCount - pendingCount, 0);
-  } catch (e) {}
-  $("stSaved").textContent    = savedCount;
+// Cheap: uses in-memory counters. A full recount would rescan the whole run
+// every second, which is what made this lag on a phone.
+function refreshCounters() {
+  $("stSaved").textContent = savedCount;
   $("stUploaded").textContent = uploadedCount;
-  $("stPending").textContent  = pendingCount;
-  $("stUploaded").className   = "v " + (pendingCount === 0 && savedCount > 0 ? "ok" : "");
-  $("stPending").className    = "v " + (pendingCount > 0 ? "warn" : "");
-  $("downloadBtn").disabled   = savedCount === 0;
-
+  $("stPending").textContent = Math.max(pendingCount, 0);
+  $("stUploaded").className = "v " + (pendingCount <= 0 && savedCount > 0 ? "ok" : "");
+  $("stPending").className = "v " + (pendingCount > 0 ? "warn" : "");
+  $("downloadBtn").disabled = savedCount === 0;
   const cloudOn = $("cloudToggle").checked;
-  let sub;
-  if (!cloudOn)                sub = "saved on device · cloud upload off";
-  else if (lastSyncError === "offline") sub = "saved on device · offline, will upload later";
-  else if (lastSyncError)      sub = "saved on device · upload retrying";
-  else if (pendingCount > 0)   sub = "saved on device · uploading…";
-  else                         sub = "saved on device · backed up to cloud";
-  $("recSub").textContent = sub;
+  $("recSub").textContent =
+    !cloudOn                       ? "saved on device · cloud upload off" :
+    lastSyncError === "offline"    ? "saved on device · offline, will upload later" :
+    lastSyncError                  ? "saved on device · upload retrying" :
+    pendingCount > 0               ? "saved on device · uploading…" :
+                                     "saved on device · backed up to cloud";
 }
 
 // ---------- start / stop ----------
-function needsMotionGesture() {
-  return typeof DeviceMotionEvent !== "undefined" &&
-         typeof DeviceMotionEvent.requestPermission === "function";
-}
+const needsGesture = () => typeof DeviceMotionEvent !== "undefined" &&
+                           typeof DeviceMotionEvent.requestPermission === "function";
 
-async function beginLogging() {
+async function beginLogging(fromGesture) {
   if (running) return;
   channel = normalizeChannel($("chInput").value) || loadChannel();
   localStorage.setItem(CH_KEY, channel);
@@ -438,22 +480,23 @@ async function beginLogging() {
 
   if (!navigator.geolocation) {
     setStatus("crit", "this browser has no Geolocation support");
-    $("recText").textContent = "Can't log here";
-    return;
+    $("recText").textContent = "Can't log here"; return;
   }
-
-  if (needsMotionGesture()) {
-    try {
-      const res = await DeviceMotionEvent.requestPermission();
-      if (res !== "granted") setStatus("warn", "motion denied — G will read 0");
-    } catch (e) { /* not granted via gesture; G stays 0 */ }
+  if (needsGesture()) {
+    try { const r = await DeviceMotionEvent.requestPermission();
+          if (r !== "granted") setStatus("warn", "motion denied — G reads 0"); } catch (e) {}
   }
   window.addEventListener("devicemotion", onMotion);
 
-  accel = [0, 0, 0]; haveLinearAccel = false; lastPosition = null;
+  // Speech must be primed inside the user gesture or mobile browsers mute it.
+  if (fromGesture && localStorage.getItem(VOICE_KEY) === "1") {
+    CTCorners.setSpeech(true); CTCorners.pickVoice(); CTCorners.say("Callouts on");
+    syncVoiceBtn();
+  }
+
+  accel = [0,0,0]; haveLinearAccel = false; lastPosition = null; trailPts = [];
   watchId = navigator.geolocation.watchPosition(onPosition, onPositionError,
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 });
-
   try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
 
   const persisted = await CT.requestPersistence();
@@ -461,18 +504,19 @@ async function beginLogging() {
   $("stPersist").className = "v " + (persisted ? "ok" : "warn");
 
   run = await CT.createRun({ channel, source: "browser" });
-  savedCount = 0; uploadedCount = 0; pendingCount = 0;
+  savedCount = uploadedCount = pendingCount = 0;
   running = true;
 
   connectMqtt();
-  const intervalMs = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
-  tickTimer = setInterval(tick, intervalMs);
+  const ms = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
+  tickTimer = setInterval(tick, ms);
   syncTimer = setInterval(syncLoop, 5000);
   uiTimer   = setInterval(refreshCounters, 1000);
 
   $("recbar").classList.add("live");
   $("recText").textContent = "Recording";
   $("gate").classList.remove("show");
+  $("stopBtn").textContent = "Stop logging"; $("stopBtn").className = "stop";
   setStatus("good", "recording on “" + channel + "”");
   renderRuns();
 }
@@ -484,34 +528,35 @@ async function stopLogging({ silent = false } = {}) {
   window.removeEventListener("devicemotion", onMotion);
   [tickTimer, syncTimer, uiTimer].forEach(t => t && clearInterval(t));
   tickTimer = syncTimer = uiTimer = null;
-  if (client) { try { client.end(true); } catch (e) {} client = null; }
-  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  if (client) { try { client.end(true); } catch(e){} client = null; }
+  if (wakeLock) { try { wakeLock.release(); } catch(e){} wakeLock = null; }
+  CTCorners.resetSpoken();
 
   const finished = run;
   if (finished) {
+    await CT.flushWrites();
     await CT.endRun(finished.runId);
-    await syncLoop();                     // final catch-up push
-    if ($("cloudToggle").checked) {
-      try { await CT.finishRemote(finished.runId); } catch (e) {}
-    }
-    await refreshCounters();
+    await syncLoop();
+    if ($("cloudToggle").checked) { try { await CT.finishRemote(finished.runId); } catch(e){} }
+    savedCount = await CT.countSamples(finished.runId);
+    pendingCount = await CT.countPending(finished.runId);
+    uploadedCount = Math.max(savedCount - pendingCount, 0);
+    refreshCounters();
   }
-
   $("recbar").classList.remove("live");
   $("recText").textContent = "Stopped";
+  $("stopBtn").textContent = "Start logging"; $("stopBtn").className = "primary";
   if (!silent) setStatus("", "stopped — " + savedCount + " samples saved");
   renderRuns();
 }
 
-// Any run left un-ended by a crash/close still has pending rows; push them.
 async function recoverPreviousRuns() {
   const runs = await CT.allRuns();
   let recovered = 0;
   for (const r of runs) {
     if (run && r.runId === run.runId) continue;
-    const pend = await CT.countPending(r.runId);
-    if (!pend) continue;
-    if (!$("cloudToggle").checked || !navigator.onLine) continue;
+    if (!$("cloudToggle").checked || !navigator.onLine) break;
+    if (!(await CT.countPending(r.runId))) continue;
     try {
       let guard = 0;
       for (;;) {
@@ -519,94 +564,113 @@ async function recoverPreviousRuns() {
         recovered += sent;
         if (!sent || !remaining || ++guard > 40) break;
       }
-      if (r.endedAt) { try { await CT.finishRemote(r.runId); } catch (e) {} }
-    } catch (e) { /* try again next page load */ }
+      if (r.endedAt) { try { await CT.finishRemote(r.runId); } catch(e){} }
+    } catch (e) { /* retry next load */ }
   }
   if (recovered) renderRuns();
   return recovered;
 }
 
-// ---------- past runs UI ----------
+// ---------- past runs ----------
 async function renderRuns() {
   const runs = await CT.allRuns();
   $("runsCount").textContent = runs.length;
   const el = $("runList");
   if (!runs.length) { el.innerHTML = '<div class="det">No runs recorded yet.</div>'; return; }
   const parts = [];
-  for (const r of runs.slice(0, 25)) {
+  for (const r of runs.slice(0, 20)) {
     const n = await CT.countSamples(r.runId);
     const pend = await CT.countPending(r.runId);
-    const when = new Date(r.startedAt).toLocaleString();
-    const mins = r.endedAt ? Math.round((r.endedAt - r.startedAt) / 60000) : null;
     const active = running && run && r.runId === run.runId;
-    parts.push(
-      '<div class="runrow">' +
-        '<div class="meta">' +
-          '<div class="when">' + when + (active ? " · recording" : "") + '</div>' +
-          '<div class="det">' + n + " samples" +
-            (mins != null ? " · " + mins + " min" : "") +
-            " · ch " + r.channel +
-            (pend ? " · " + pend + " to upload" : " · backed up") +
-          '</div>' +
-        '</div>' +
-        '<button data-csv="' + r.runId + '">CSV</button>' +
-        (active ? "" : '<button data-del="' + r.runId + '">✕</button>') +
-      '</div>');
+    const mins = r.endedAt ? Math.round((r.endedAt - r.startedAt)/60000) : null;
+    parts.push('<div class="runrow"><div class="meta">' +
+      '<div>' + new Date(r.startedAt).toLocaleString() + (active ? " · recording" : "") + '</div>' +
+      '<div class="det">' + n + " samples" + (mins != null ? " · " + mins + " min" : "") +
+        " · ch " + r.channel + (pend ? " · " + pend + " to upload" : " · backed up") + '</div>' +
+      '</div><button data-csv="' + r.runId + '">CSV</button>' +
+      (active ? "" : '<button data-del="' + r.runId + '">✕</button>') + '</div>');
   }
   el.innerHTML = parts.join("");
   el.querySelectorAll("[data-csv]").forEach(b => b.onclick = async () => {
     const rows = await CT.getAllSamples(b.dataset.csv);
-    CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + b.dataset.csv.slice(0, 8) + ".csv");
+    CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + b.dataset.csv.slice(0,8) + ".csv");
   });
   el.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
-    if (!confirm("Delete this run from this device? Cloud copy is kept.")) return;
-    await CT.deleteRun(b.dataset.del);
-    renderRuns();
+    if (!confirm("Delete this run from this device? The cloud copy is kept.")) return;
+    await CT.deleteRun(b.dataset.del); renderRuns();
   });
 }
 
-// ---------- wiring ----------
-$("stopBtn").onclick = () => running ? stopLogging() : beginLogging();
+// ---------- toggles ----------
+function syncVoiceBtn() {
+  const on = CTCorners.isSpeechOn();
+  $("voiceBtn").textContent = "🔊 Voice: " + (on ? "on" : "off");
+  $("voiceBtn").classList.toggle("on", on);
+}
+function syncMapBtn() {
+  $("mapBtn").textContent = "🗺 Map: " + (mapOn ? "on" : "off");
+  $("mapBtn").classList.toggle("on", mapOn);
+  $("map").style.display = mapOn ? "" : "none";
+}
+
+$("voiceBtn").onclick = () => {
+  const on = CTCorners.setSpeech(!CTCorners.isSpeechOn());
+  localStorage.setItem(VOICE_KEY, on ? "1" : "0");
+  if (on) { CTCorners.pickVoice(); CTCorners.say("Corner callouts on"); }
+  syncVoiceBtn();
+};
+$("mapBtn").onclick = () => {
+  mapOn = !mapOn;
+  localStorage.setItem(MAP_KEY, mapOn ? "1" : "0");
+  syncMapBtn();
+  if (mapOn) { makeMap(); setTimeout(() => map && map.invalidateSize(), 60); }
+};
+$("stopBtn").onclick = () => running ? stopLogging() : beginLogging(true);
+$("gateBtn").onclick = () => beginLogging(true);
 $("downloadBtn").onclick = async () => {
   if (!run) return;
   const rows = await CT.getAllSamples(run.runId);
-  CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + run.runId.slice(0, 8) + ".csv");
+  CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + run.runId.slice(0,8) + ".csv");
 };
-$("gateBtn").onclick = () => beginLogging();
 $("labelInput").onchange = () => CT.setDeviceLabel($("labelInput").value);
-$("chInput").oninput = () => updateViewerLink();
+$("chInput").oninput = updateViewerLink;
 $("cloudToggle").onchange = () => { lastSyncError = null; refreshCounters(); };
 
-// Keep the wake lock across tab switches, and push anything queued when we
-// come back online.
 document.addEventListener("visibilitychange", async () => {
   if (running && document.visibilityState === "visible" && !wakeLock) {
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
   }
 });
-window.addEventListener("online", () => { lastSyncError = null; syncLoop(); });
+window.addEventListener("online",  () => { lastSyncError = null; syncLoop(); });
 window.addEventListener("offline", () => { lastSyncError = "offline"; refreshCounters(); });
-window.addEventListener("pagehide", () => { if (running) stopLogging({ silent: true }); });
+// Best-effort final flush; the run is recoverable next load regardless.
+window.addEventListener("pagehide", () => { CT.flushWrites(); if (running) stopLogging({ silent: true }); });
 
-// Reflect Stop/Start on the one button.
-setInterval(() => {
-  $("stopBtn").textContent = running ? "Stop logging" : "Start logging";
-  $("stopBtn").className = running ? "stop" : "primary";
-}, 500);
-
-// ---------- init: always-on ----------
+// ---------- init ----------
 (async () => {
-  await renderRuns();
-  const recovered = await recoverPreviousRuns();
-  if (recovered) setStatus("warn", "uploaded " + recovered + " samples from an earlier run");
+  const [routeOk, cornersOk] = await Promise.all([CTRoute.load(), CTCorners.load()]);
+  $("routeInfo").textContent = routeOk
+    ? CTRoute.name + " — " + CTRoute.points.length + " pts, " +
+      (CTRoute.totalDistM/1000).toFixed(2) + " km, " + CTCorners.count + " named corners"
+    : "reference route failed to load";
+  if (!routeOk) { $("coDist").textContent = "no route loaded"; }
 
-  if (needsMotionGesture()) {
-    // iOS: motion sensors require a real user gesture, so show the gate.
+  syncMapBtn(); if (mapOn) makeMap();
+  CTCorners.setSpeech(false); syncVoiceBtn();
+  CTRoute.drawForward($("fwCanvas"), null, 0,
+    { emptyText: routeOk ? "waiting for a GPS fix…" : "no route loaded" });
+
+  await renderRuns();
+  const rec = await recoverPreviousRuns();
+  if (rec) setStatus("warn", "uploaded " + rec + " samples from an earlier run");
+
+  // iOS needs a gesture for motion + speech; elsewhere start straight away.
+  if (needsGesture()) {
     $("gate").classList.add("show");
     $("recText").textContent = "Waiting for you to start";
     setStatus("warn", "tap to start");
   } else {
-    beginLogging();
+    beginLogging(false);
   }
 })();
 </script>

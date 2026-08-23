@@ -24,6 +24,8 @@ const CT = (() => {
   const LABEL_KEY  = "cartelemetry_device_label_v1";
 
   const UPLOAD_BATCH   = 500;   // rows per RPC call (server cap is 2000)
+  const WRITE_FLUSH_MS  = 4000; // buffer window before hitting IndexedDB
+  const WRITE_FLUSH_MAX = 25;   // ...or this many samples, whichever first
   const CSV_HEADER = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total";
 
   // ---------- ids ----------
@@ -126,10 +128,38 @@ const CT = (() => {
   }
 
   // ---------- samples ----------
-  // Written synchronously-ish on every tick; `uploaded` is 0/1 (IndexedDB
-  // indexes can't key on booleans in all engines).
-  async function addSample(runId, sample) {
-    return tx(STORE_SAMPLES, "readwrite", s => s.put({ ...sample, runId, uploaded: 0 }));
+  // `uploaded` is 0/1 (IndexedDB indexes can't key on booleans in all engines).
+  //
+  // Writes are buffered and flushed as one transaction rather than one
+  // transaction per sample: on a phone, a per-tick transaction plus the
+  // per-second full-range recount this used to do made the UI visibly lag
+  // once a run had a few thousand rows.
+  const writeBuf = new Map();          // runId -> [samples]
+  let writeTimer = null;
+
+  function addSample(runId, sample) {
+    if (!writeBuf.has(runId)) writeBuf.set(runId, []);
+    writeBuf.get(runId).push({ ...sample, runId, uploaded: 0 });
+    if (!writeTimer) writeTimer = setTimeout(flushWrites, WRITE_FLUSH_MS);
+    if (writeBuf.get(runId).length >= WRITE_FLUSH_MAX) return flushWrites();
+    return Promise.resolve();
+  }
+
+  // Persist everything buffered so far. Called on a timer, when the buffer
+  // fills, and unconditionally before a run ends or the page goes away.
+  async function flushWrites() {
+    if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
+    if (!writeBuf.size) return 0;
+    const pending = [...writeBuf.entries()];
+    writeBuf.clear();
+    let n = 0;
+    await tx(STORE_SAMPLES, "readwrite", s => {
+      for (const [, rows] of pending) for (const r of rows) { s.put(r); n++; }
+    });
+    return n;
+  }
+  function bufferedCount() {
+    let n = 0; for (const rows of writeBuf.values()) n += rows.length; return n;
   }
   async function countSamples(runId) {
     return tx(STORE_SAMPLES, "readonly", s =>
@@ -154,6 +184,7 @@ const CT = (() => {
     });
   }
   async function getAllSamples(runId) {
+    await flushWrites();
     const rows = await tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.getAll(IDBKeyRange.bound([runId, -Infinity], [runId, Infinity]))));
     return (rows || []).sort((a, b) => a.t - b.t);
@@ -215,6 +246,7 @@ const CT = (() => {
   // Safe to call repeatedly and concurrently-ish; server-side upsert makes
   // re-sending harmless, so a failed/duplicated attempt costs nothing.
   async function flushOnce(run) {
+    await flushWrites();                 // never upload behind the write buffer
     const pend = await pendingSamples(run.runId, UPLOAD_BATCH);
     if (!pend.length) return { sent: 0, remaining: 0 };
     await ensureRemoteRun(run);
@@ -295,7 +327,7 @@ const CT = (() => {
   return {
     uuid, deviceId, deviceLabel, setDeviceLabel, guessDeviceLabel,
     createRun, getRun, putRun, allRuns, endRun, deleteRun,
-    addSample, countSamples, countPending, getAllSamples,
+    addSample, flushWrites, bufferedCount, countSamples, countPending, getAllSamples,
     flushOnce, finishRemote, ensureRemoteRun,
     listRunsByChannel, listRunsByDevice, fetchSamples,
     samplesToCsv, downloadCsv, requestPersistence,
