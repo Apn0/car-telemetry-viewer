@@ -57,7 +57,6 @@
     background: var(--page);
     color: var(--text-primary);
     font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-    -webkit-user-select: none; user-select: none;
   }
   header {
     display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
@@ -71,9 +70,9 @@
     background: var(--surface-1);
     border: 1px solid var(--baseline);
     border-radius: 8px;
-    padding: 10px 12px;
+    padding: 9px 11px;
   }
-  button { cursor: pointer; -webkit-user-select: none; user-select: none; }
+  button { cursor: pointer; }
   button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
   button.stop { background: var(--status-crit); color: #fff; border-color: transparent; }
   button:disabled { opacity: 0.5; }
@@ -84,55 +83,112 @@
     font-size: 13px; color: var(--text-secondary);
   }
   .pill .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
-  .pill.good .dot { background: var(--status-good); }
+  .pill.good .dot { background: var(--status-good); animation: pulse 2s infinite; }
   .pill.warn .dot { background: var(--status-warn); }
   .pill.crit .dot { background: var(--status-crit); }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
 
-  main { padding: 16px; max-width: 480px; margin: 0 auto 60px; }
+  main { padding: 16px; max-width: 520px; margin: 0 auto 60px; }
 
-  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  /* Tap-to-begin gate: only shown when the browser needs a user gesture
+     before it will hand over motion sensors (notably iOS Safari). */
+  #gate {
+    position: fixed; inset: 0; z-index: 50;
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; padding: 32px; text-align: center;
+    background: var(--page);
+  }
+  #gate.show { display: flex; }
+  #gate h2 { margin: 0; font-size: 22px; }
+  #gate p { margin: 0; color: var(--text-secondary); font-size: 14px; max-width: 320px; line-height: 1.5; }
+  #gateBtn { padding: 22px 40px; font-size: 20px; font-weight: 650; border-radius: 16px; }
+
+  .recbar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .recbar .rec { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); flex: none; }
+  .recbar.live .rec { background: var(--status-crit); animation: pulse 1.4s infinite; }
+  .recbar .txt { flex: 1 1 auto; font-size: 14px; font-weight: 600; }
+  .recbar .sub { font-size: 12px; color: var(--text-secondary); font-weight: 400; }
+
+  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
   .row label { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
-  .row input[type=text], .row input[type=number] { flex: 1 1 auto; min-width: 0; }
+  .row input[type=text] { flex: 1 1 120px; min-width: 0; }
 
-  .startBtn { display: block; width: 100%; padding: 20px; font-size: 20px; font-weight: 650;
-    border-radius: 14px; margin: 4px 0 16px; }
-
-  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 16px; }
+  .hud { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 14px; }
   .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
     padding: 14px; min-width: 0; }
   .tile.hero { grid-column: span 2; text-align: center; }
   .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
   .tile .value { font-size: 22px; font-weight: 650; }
-  .tile.hero .value { font-size: 48px; line-height: 1.05; }
+  .tile.hero .value { font-size: 46px; line-height: 1.05; }
   .tile .unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
 
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
-  .actions button, .actions a { flex: 1 1 auto; text-align: center; text-decoration: none; }
+  .storebox {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px;
+  }
+  .storebox .line { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+  .storebox .k { color: var(--text-secondary); }
+  .storebox .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .storebox .v.ok   { color: var(--status-good); }
+  .storebox .v.warn { color: var(--status-warn); }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .actions button, .actions a {
+    flex: 1 1 auto; text-align: center; text-decoration: none;
+    padding: 12px; border-radius: 10px; border: 1px solid var(--baseline);
+    background: var(--surface-1); color: var(--text-primary); font: inherit;
+  }
+  #stopBtn { flex-basis: 100%; }
+
+  .runlist { margin-top: 6px; }
+  .runrow {
+    display: flex; align-items: center; gap: 10px; padding: 9px 0;
+    border-bottom: 1px solid var(--grid); font-size: 13px;
+  }
+  .runrow:last-child { border-bottom: none; }
+  .runrow .meta { flex: 1 1 auto; min-width: 0; }
+  .runrow .when { font-weight: 600; }
+  .runrow .det { font-size: 12px; color: var(--muted); }
+  .runrow button { padding: 6px 10px; font-size: 12px; }
 
   details { margin-top: 14px; color: var(--text-secondary); }
   details summary { cursor: pointer; padding: 6px 0; }
   .adv-row { margin: 10px 0; }
   .adv-row label { display: block; font-size: 12px; margin-bottom: 4px; }
-  .adv-row input { width: 100%; }
+  .adv-row input, .adv-row select { width: 100%; }
 
   .note { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.5; }
 </style>
 </head>
 <body>
 
+<div id="gate">
+  <h2>Ready to log</h2>
+  <p id="gateMsg">Tap below to allow location and motion access. Logging starts immediately and keeps running until you stop it.</p>
+  <button id="gateBtn" class="primary">Tap to start logging</button>
+</div>
+
 <header>
   <h1>CarTelemetry Logger</h1>
-  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">stopped</span></span>
+  <span id="statusPill" class="pill"><span class="dot"></span><span id="statusText">starting…</span></span>
 </header>
 
 <main>
-  <div class="row">
-    <label for="chInput">channel</label>
-    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
-    <button id="newChBtn" title="Generate a new random channel id">🎲</button>
+  <div class="recbar" id="recbar">
+    <span class="rec"></span>
+    <span class="txt"><span id="recText">Starting…</span><br><span class="sub" id="recSub">&nbsp;</span></span>
   </div>
 
-  <button id="startStopBtn" class="startBtn primary">Start logging</button>
+  <div class="row">
+    <label for="labelInput">device</label>
+    <input id="labelInput" type="text" maxlength="60" autocapitalize="words" autocorrect="off" spellcheck="false">
+    <label for="chInput">channel</label>
+    <input id="chInput" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+  </div>
 
   <div class="hud">
     <div class="tile hero">
@@ -141,15 +197,25 @@
     </div>
     <div class="tile"><div class="label">GPS</div><div class="value" id="hudFix">–</div><div class="label" id="hudAcc"></div></div>
     <div class="tile"><div class="label">G-force</div><div class="value" id="hudG">–</div></div>
-    <div class="tile" style="grid-column: span 2;"><div class="label">Logged this session</div><div class="value" id="hudSent">0 samples</div></div>
+  </div>
+
+  <div class="storebox">
+    <div class="line"><span class="k">Saved on this device</span><span class="v ok" id="stSaved">0</span></div>
+    <div class="line"><span class="k">Uploaded to cloud</span><span class="v" id="stUploaded">0</span></div>
+    <div class="line"><span class="k">Waiting to upload</span><span class="v" id="stPending">0</span></div>
+    <div class="line"><span class="k">Storage</span><span class="v" id="stPersist">–</span></div>
   </div>
 
   <div class="actions">
+    <button id="stopBtn" class="stop">Stop logging</button>
     <a id="viewerLink" href="index.html" target="_blank" rel="noopener">Open live viewer</a>
     <button id="downloadBtn" disabled>Download CSV</button>
   </div>
 
-  <p class="note" style="margin-top:-6px"><a href="demo.html">Not near the car? Watch a synthetic demo lap instead →</a></p>
+  <details id="runsBox">
+    <summary>Past runs on this device (<span id="runsCount">0</span>)</summary>
+    <div class="runlist" id="runList"></div>
+  </details>
 
   <details>
     <summary>Advanced</summary>
@@ -161,26 +227,31 @@
       <label for="brokerInput">MQTT broker (WebSocket)</label>
       <input id="brokerInput" type="text" value="wss://broker.hivemq.com:8884/mqtt">
     </div>
+    <div class="adv-row">
+      <label><input type="checkbox" id="cloudToggle" checked style="width:auto"> upload runs to cloud storage</label>
+    </div>
   </details>
 
-  <p class="note">
-    Runs entirely in this tab — no app to install. Needs GPS + motion-sensor permission
-    (iOS asks once per session when you tap Start), and the screen has to stay on with this
-    tab in the foreground the whole time you're logging: browsers don't get background GPS
-    the way a native app does, so switching apps or letting the screen lock pauses logging.
-    Data streams live to the same public HiveMQ broker as the Android app — anyone with your
-    channel ID can watch it in the viewer. Samples are also buffered here for <b>Download CSV</b>,
-    but that buffer only lives in this tab, so download it before you close the page.
+  <p class="note" id="footNote">
+    Logging starts on its own when this page opens and every sample is written to this
+    device immediately, so nothing is lost if you close the tab, reload, lose signal or
+    the browser crashes — the run is picked up again next time you open the page.
+    Samples upload to cloud storage in the background whenever there's a connection,
+    and anything queued while you're out of coverage is sent once you're back.
+    <b>The screen still has to stay on with this tab in front while logging</b> —
+    browsers don't get background GPS the way a native app does.
+    <a href="demo.html">No car handy? Watch a synthetic demo lap →</a>
   </p>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="storage.js"></script>
 <script>
 "use strict";
 
 const TOPIC_PREFIX = "cartelemetry/v1/";
 const CH_KEY = "cartelemetry_channel_v1";
-const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/1/i/l/o — avoids look-alikes
+const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const $ = id => document.getElementById(id);
 
 function randomChannel() {
@@ -204,15 +275,18 @@ let running = false;
 let client = null;
 let watchId = null;
 let wakeLock = null;
-let tickTimer = null;
-let lastPosition = null;      // {lat, lon, alt, spd, brg, hacc, t}
-let accel = [0, 0, 0];        // smoothed m/s^2, gravity removed if the sensor gives us that
+let tickTimer = null, syncTimer = null, uiTimer = null;
+let lastPosition = null;
+let accel = [0, 0, 0];
 let haveLinearAccel = false;
-let samplesSent = 0;
-let rows = [];                 // buffered CSV lines for this session
+let run = null;              // current CT run record
+let savedCount = 0, uploadedCount = 0, pendingCount = 0;
+let syncing = false;
+let lastSyncError = null;
 let channel = loadChannel();
 
 $("chInput").value = channel;
+$("labelInput").value = CT.deviceLabel();
 updateViewerLink();
 
 function setStatus(kind, text) {
@@ -240,7 +314,6 @@ function onMotion(e) {
   accel[1] = 0.7 * accel[1] + 0.3 * (a.y || 0);
   accel[2] = 0.7 * accel[2] + 0.3 * (a.z || 0);
 }
-
 function onPosition(pos) {
   const c = pos.coords;
   lastPosition = {
@@ -250,31 +323,31 @@ function onPosition(pos) {
   };
 }
 function onPositionError(err) {
-  setStatus("crit", "GPS error: " + err.message);
+  lastSyncError = null;
+  setStatus("crit", "GPS: " + err.message);
 }
 
-// ---------- MQTT ----------
+// ---------- MQTT (live view only; storage is independent of it) ----------
 function connectMqtt() {
   const broker = $("brokerInput").value.trim() || "wss://broker.hivemq.com:8884/mqtt";
-  setStatus("warn", "connecting to broker…");
   client = mqtt.connect(broker, {
     clean: true, connectTimeout: 8000, reconnectPeriod: 4000,
     clientId: "car-web-" + channel + "-" + Math.floor(Math.random() * 100000)
   });
   client.on("connect", () => setStatus("good", "live on “" + channel + "”"));
-  client.on("error", () => setStatus("crit", "broker error — retrying"));
-  client.on("offline", () => setStatus("crit", "broker offline — retrying"));
+  client.on("error",   () => setStatus("warn", "broker unreachable — still recording"));
+  client.on("offline", () => setStatus("warn", "broker offline — still recording"));
 }
 
-// ---------- tick: publish + CSV-buffer one sample ----------
-function tick() {
+// ---------- tick: build a sample, persist it, then publish ----------
+async function tick() {
   const now = Date.now();
   const fix = !!(lastPosition && now - lastPosition.t < 5000);
   const ax = accel[0], ay = accel[1], az = accel[2];
   const g = Math.sqrt(ax * ax + ay * ay + az * az) / 9.80665;
   const spdKmh = fix && lastPosition.spd != null ? lastPosition.spd * 3.6 : 0;
 
-  const sample = { t: now, ch: channel, fix };
+  const sample = { t: now, fix, ax: round3(ax), ay: round3(ay), az: round3(az), g: round3(g) };
   if (fix) {
     sample.lat = lastPosition.lat;
     sample.lon = lastPosition.lon;
@@ -283,113 +356,259 @@ function tick() {
     if (lastPosition.brg != null) sample.brg = lastPosition.brg;
     sample.hacc = lastPosition.hacc;
   }
-  sample.ax = round3(ax); sample.ay = round3(ay); sample.az = round3(az);
-  sample.g = round3(g);
-  sample.lin = haveLinearAccel;
 
-  rows.push([
-    now, new Date(now).toISOString(),
-    fix ? lastPosition.lat : "",
-    fix ? lastPosition.lon : "",
-    fix && lastPosition.alt != null ? lastPosition.alt.toFixed(1) : "",
-    spdKmh.toFixed(2),
-    fix && lastPosition.brg != null ? lastPosition.brg.toFixed(1) : "",
-    fix ? lastPosition.hacc.toFixed(1) : "",
-    ax.toFixed(3), ay.toFixed(3), az.toFixed(3), g.toFixed(3)
-  ].join(","));
+  // Durability first: once this resolves the sample survives a crash.
+  try {
+    await CT.addSample(run.runId, sample);
+    savedCount++;
+    pendingCount++;
+  } catch (e) {
+    setStatus("crit", "storage error: " + e.message);
+  }
 
   if (client && client.connected) {
-    client.publish(TOPIC_PREFIX + channel, JSON.stringify(sample), { qos: 0, retain: true });
-    samplesSent++;
+    client.publish(TOPIC_PREFIX + channel,
+      JSON.stringify({ ...sample, ch: channel, lin: haveLinearAccel }),
+      { qos: 0, retain: true });
   }
 
   $("hudSpeed").textContent = fix ? Math.round(spdKmh) : "–";
   $("hudFix").textContent = fix ? "fix" : "no fix";
   $("hudAcc").textContent = fix ? "± " + Math.round(lastPosition.hacc) + " m" : "";
   $("hudG").textContent = g.toFixed(2) + " g";
-  $("hudSent").textContent = samplesSent + " sent · " + rows.length + " logged";
-  $("downloadBtn").disabled = rows.length === 0;
 }
 
-// ---------- start/stop ----------
-async function start() {
+// ---------- background upload ----------
+async function syncLoop() {
+  if (syncing || !run || !$("cloudToggle").checked) return;
+  if (!navigator.onLine) { lastSyncError = "offline"; return; }
+  syncing = true;
+  try {
+    let guard = 0;
+    for (;;) {
+      const { sent, remaining } = await CT.flushOnce(run);
+      if (sent) { uploadedCount += sent; pendingCount = remaining; }
+      lastSyncError = null;
+      if (!sent || !remaining || ++guard > 20) break;
+    }
+  } catch (e) {
+    lastSyncError = (e && e.message) ? e.message : String(e);
+  } finally {
+    syncing = false;
+  }
+}
+
+async function refreshCounters() {
+  if (!run) return;
+  try {
+    savedCount   = await CT.countSamples(run.runId);
+    pendingCount = await CT.countPending(run.runId);
+    uploadedCount = Math.max(savedCount - pendingCount, 0);
+  } catch (e) {}
+  $("stSaved").textContent    = savedCount;
+  $("stUploaded").textContent = uploadedCount;
+  $("stPending").textContent  = pendingCount;
+  $("stUploaded").className   = "v " + (pendingCount === 0 && savedCount > 0 ? "ok" : "");
+  $("stPending").className    = "v " + (pendingCount > 0 ? "warn" : "");
+  $("downloadBtn").disabled   = savedCount === 0;
+
+  const cloudOn = $("cloudToggle").checked;
+  let sub;
+  if (!cloudOn)                sub = "saved on device · cloud upload off";
+  else if (lastSyncError === "offline") sub = "saved on device · offline, will upload later";
+  else if (lastSyncError)      sub = "saved on device · upload retrying";
+  else if (pendingCount > 0)   sub = "saved on device · uploading…";
+  else                         sub = "saved on device · backed up to cloud";
+  $("recSub").textContent = sub;
+}
+
+// ---------- start / stop ----------
+function needsMotionGesture() {
+  return typeof DeviceMotionEvent !== "undefined" &&
+         typeof DeviceMotionEvent.requestPermission === "function";
+}
+
+async function beginLogging() {
+  if (running) return;
   channel = normalizeChannel($("chInput").value) || loadChannel();
   localStorage.setItem(CH_KEY, channel);
   $("chInput").value = channel;
+  CT.setDeviceLabel($("labelInput").value);
   updateViewerLink();
-  const intervalMs = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
 
-  if (!navigator.geolocation) { alert("This browser doesn't support Geolocation."); return; }
+  if (!navigator.geolocation) {
+    setStatus("crit", "this browser has no Geolocation support");
+    $("recText").textContent = "Can't log here";
+    return;
+  }
 
-  if (typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function") {
+  if (needsMotionGesture()) {
     try {
       const res = await DeviceMotionEvent.requestPermission();
-      if (res !== "granted") alert("Motion permission denied — G-force will read 0.");
-    } catch (e) { /* not iOS, or already granted */ }
+      if (res !== "granted") setStatus("warn", "motion denied — G will read 0");
+    } catch (e) { /* not granted via gesture; G stays 0 */ }
   }
   window.addEventListener("devicemotion", onMotion);
-  accel = [0, 0, 0]; haveLinearAccel = false; lastPosition = null;
 
+  accel = [0, 0, 0]; haveLinearAccel = false; lastPosition = null;
   watchId = navigator.geolocation.watchPosition(onPosition, onPositionError,
     { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 });
 
-  try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* not supported/denied */ }
+  try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
 
-  rows = []; samplesSent = 0;
+  const persisted = await CT.requestPersistence();
+  $("stPersist").textContent = persisted ? "persistent" : "best-effort";
+  $("stPersist").className = "v " + (persisted ? "ok" : "warn");
+
+  run = await CT.createRun({ channel, source: "browser" });
+  savedCount = 0; uploadedCount = 0; pendingCount = 0;
   running = true;
-  connectMqtt();
-  tickTimer = setInterval(tick, intervalMs);
 
-  $("startStopBtn").textContent = "Stop logging";
-  $("startStopBtn").className = "startBtn stop";
-  $("chInput").disabled = true;
+  connectMqtt();
+  const intervalMs = clamp(parseInt($("intervalInput").value, 10) || 1000, 200, 60000);
+  tickTimer = setInterval(tick, intervalMs);
+  syncTimer = setInterval(syncLoop, 5000);
+  uiTimer   = setInterval(refreshCounters, 1000);
+
+  $("recbar").classList.add("live");
+  $("recText").textContent = "Recording";
+  $("gate").classList.remove("show");
+  setStatus("good", "recording on “" + channel + "”");
+  renderRuns();
 }
 
-function stop() {
+async function stopLogging({ silent = false } = {}) {
+  if (!running) return;
   running = false;
   if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
   window.removeEventListener("devicemotion", onMotion);
-  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  [tickTimer, syncTimer, uiTimer].forEach(t => t && clearInterval(t));
+  tickTimer = syncTimer = uiTimer = null;
   if (client) { try { client.end(true); } catch (e) {} client = null; }
   if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
-  setStatus("", "stopped");
-  $("startStopBtn").textContent = "Start logging";
-  $("startStopBtn").className = "startBtn primary";
-  $("chInput").disabled = false;
+
+  const finished = run;
+  if (finished) {
+    await CT.endRun(finished.runId);
+    await syncLoop();                     // final catch-up push
+    if ($("cloudToggle").checked) {
+      try { await CT.finishRemote(finished.runId); } catch (e) {}
+    }
+    await refreshCounters();
+  }
+
+  $("recbar").classList.remove("live");
+  $("recText").textContent = "Stopped";
+  if (!silent) setStatus("", "stopped — " + savedCount + " samples saved");
+  renderRuns();
 }
 
+// Any run left un-ended by a crash/close still has pending rows; push them.
+async function recoverPreviousRuns() {
+  const runs = await CT.allRuns();
+  let recovered = 0;
+  for (const r of runs) {
+    if (run && r.runId === run.runId) continue;
+    const pend = await CT.countPending(r.runId);
+    if (!pend) continue;
+    if (!$("cloudToggle").checked || !navigator.onLine) continue;
+    try {
+      let guard = 0;
+      for (;;) {
+        const { sent, remaining } = await CT.flushOnce(r);
+        recovered += sent;
+        if (!sent || !remaining || ++guard > 40) break;
+      }
+      if (r.endedAt) { try { await CT.finishRemote(r.runId); } catch (e) {} }
+    } catch (e) { /* try again next page load */ }
+  }
+  if (recovered) renderRuns();
+  return recovered;
+}
+
+// ---------- past runs UI ----------
+async function renderRuns() {
+  const runs = await CT.allRuns();
+  $("runsCount").textContent = runs.length;
+  const el = $("runList");
+  if (!runs.length) { el.innerHTML = '<div class="det">No runs recorded yet.</div>'; return; }
+  const parts = [];
+  for (const r of runs.slice(0, 25)) {
+    const n = await CT.countSamples(r.runId);
+    const pend = await CT.countPending(r.runId);
+    const when = new Date(r.startedAt).toLocaleString();
+    const mins = r.endedAt ? Math.round((r.endedAt - r.startedAt) / 60000) : null;
+    const active = running && run && r.runId === run.runId;
+    parts.push(
+      '<div class="runrow">' +
+        '<div class="meta">' +
+          '<div class="when">' + when + (active ? " · recording" : "") + '</div>' +
+          '<div class="det">' + n + " samples" +
+            (mins != null ? " · " + mins + " min" : "") +
+            " · ch " + r.channel +
+            (pend ? " · " + pend + " to upload" : " · backed up") +
+          '</div>' +
+        '</div>' +
+        '<button data-csv="' + r.runId + '">CSV</button>' +
+        (active ? "" : '<button data-del="' + r.runId + '">✕</button>') +
+      '</div>');
+  }
+  el.innerHTML = parts.join("");
+  el.querySelectorAll("[data-csv]").forEach(b => b.onclick = async () => {
+    const rows = await CT.getAllSamples(b.dataset.csv);
+    CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + b.dataset.csv.slice(0, 8) + ".csv");
+  });
+  el.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this run from this device? Cloud copy is kept.")) return;
+    await CT.deleteRun(b.dataset.del);
+    renderRuns();
+  });
+}
+
+// ---------- wiring ----------
+$("stopBtn").onclick = () => running ? stopLogging() : beginLogging();
+$("downloadBtn").onclick = async () => {
+  if (!run) return;
+  const rows = await CT.getAllSamples(run.runId);
+  CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + run.runId.slice(0, 8) + ".csv");
+};
+$("gateBtn").onclick = () => beginLogging();
+$("labelInput").onchange = () => CT.setDeviceLabel($("labelInput").value);
+$("chInput").oninput = () => updateViewerLink();
+$("cloudToggle").onchange = () => { lastSyncError = null; refreshCounters(); };
+
+// Keep the wake lock across tab switches, and push anything queued when we
+// come back online.
 document.addEventListener("visibilitychange", async () => {
   if (running && document.visibilityState === "visible" && !wakeLock) {
     try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
   }
 });
+window.addEventListener("online", () => { lastSyncError = null; syncLoop(); });
+window.addEventListener("offline", () => { lastSyncError = "offline"; refreshCounters(); });
+window.addEventListener("pagehide", () => { if (running) stopLogging({ silent: true }); });
 
-// ---------- CSV download ----------
-function downloadCsv() {
-  if (!rows.length) return;
-  const header = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total\n";
-  const blob = new Blob([header + rows.join("\n") + "\n"], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "telemetry-" + new Date().toISOString().replace(/[:.]/g, "-") + ".csv";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
+// Reflect Stop/Start on the one button.
+setInterval(() => {
+  $("stopBtn").textContent = running ? "Stop logging" : "Start logging";
+  $("stopBtn").className = running ? "stop" : "primary";
+}, 500);
 
-// ---------- wiring ----------
-$("newChBtn").onclick = () => {
-  if (running) return;
-  channel = randomChannel();
-  localStorage.setItem(CH_KEY, channel);
-  $("chInput").value = channel;
-  updateViewerLink();
-};
-$("chInput").oninput = () => updateViewerLink();
-$("startStopBtn").onclick = () => { running ? stop() : start(); };
-$("downloadBtn").onclick = downloadCsv;
+// ---------- init: always-on ----------
+(async () => {
+  await renderRuns();
+  const recovered = await recoverPreviousRuns();
+  if (recovered) setStatus("warn", "uploaded " + recovered + " samples from an earlier run");
 
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {});
+  if (needsMotionGesture()) {
+    // iOS: motion sensors require a real user gesture, so show the gate.
+    $("gate").classList.add("show");
+    $("recText").textContent = "Waiting for you to start";
+    setStatus("warn", "tap to start");
+  } else {
+    beginLogging();
+  }
+})();
 </script>
 </body>
 </html>

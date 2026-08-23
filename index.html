@@ -244,6 +244,18 @@
   </section>
 
   <section id="panel-data" class="panel">
+    <div class="chartbox" style="margin-bottom:12px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px">
+        <h2 style="margin:0;flex:1 1 auto">Stored runs</h2>
+        <select id="runScope" style="font-size:13px">
+          <option value="channel">on this channel</option>
+          <option value="device">from this device</option>
+        </select>
+        <button id="runRefresh">Refresh</button>
+      </div>
+      <div id="runList" style="font-size:13px;color:var(--text-secondary)">enter a channel and press Refresh</div>
+    </div>
+
     <div id="replaybar" class="inactive">
       <label style="font-size:13px;color:var(--text-secondary)">
         Load a CSV log: <input type="file" id="fileInput" accept=".csv,text/csv">
@@ -277,6 +289,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="storage.js"></script>
 <script>
 "use strict";
 
@@ -896,6 +909,74 @@ $("fileInput").onchange = e => {
   r.readAsText(f);
 };
 $("scrub").oninput = e => { stopPlayback(); showReplayIdx(parseInt(e.target.value, 10)); };
+
+// ---------- stored runs (cloud) ----------
+// Rows come back from SECURITY DEFINER RPCs -- knowing the channel (or owning
+// the device) is what grants access, mirroring how the live feed already works.
+async function refreshRuns() {
+  const el = $("runList");
+  const scope = $("runScope").value;
+  const ch = $("chInput").value.trim().toLowerCase();
+  if (scope === "channel" && !ch) { el.textContent = "enter a channel id first"; return; }
+  el.textContent = "loading…";
+  try {
+    const runs = scope === "channel"
+      ? await CT.listRunsByChannel(ch)
+      : await CT.listRunsByDevice();
+    if (!runs || !runs.length) {
+      el.textContent = scope === "channel"
+        ? "no stored runs on “" + ch + "” yet"
+        : "no stored runs from this device yet";
+      return;
+    }
+    el.innerHTML = runs.map(r => {
+      const when = new Date(r.started_at).toLocaleString();
+      const mins = r.ended_at
+        ? Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min"
+        : "in progress";
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid)">' +
+        '<div style="flex:1 1 auto;min-width:0">' +
+          '<div style="font-weight:600;color:var(--text-primary)">' + when +
+            ' <span style="font-weight:400;color:var(--muted)">· ' + (r.device_label || "device") + '</span></div>' +
+          '<div style="font-size:12px;color:var(--muted)">' + r.sample_count + ' samples · ' + mins +
+            ' · ch ' + r.channel + (r.source !== "browser" ? " · " + r.source : "") + '</div>' +
+        '</div>' +
+        '<button data-play="' + r.run_id + '">Replay</button>' +
+        '<button data-dl="' + r.run_id + '">CSV</button>' +
+      '</div>';
+    }).join("");
+    el.querySelectorAll("[data-play]").forEach(b => b.onclick = () => loadStoredRun(b.dataset.play, false));
+    el.querySelectorAll("[data-dl]").forEach(b => b.onclick = () => loadStoredRun(b.dataset.dl, true));
+  } catch (e) {
+    el.textContent = "couldn't load runs: " + (e.message || e);
+  }
+}
+
+async function loadStoredRun(runId, asCsv) {
+  const el = $("runList");
+  const prev = el.innerHTML;
+  try {
+    const rows = await CT.fetchSamples(runId);
+    if (!rows || !rows.length) { alert("That run has no samples stored."); return; }
+    const mapped = rows.map(r => ({
+      t: Number(r.t), lat: r.lat, lon: r.lon, alt: r.alt_m, spd: r.speed_kmh,
+      brg: r.bearing_deg, hacc: r.hacc_m, ax: r.ax_ms2, ay: r.ay_ms2, az: r.az_ms2,
+      g: r.g_total, fix: !!r.fix
+    }));
+    if (asCsv) {
+      CT.downloadCsv(CT.samplesToCsv(mapped), "run-" + runId.slice(0, 8) + ".csv");
+    } else {
+      enterReplay(mapped, "stored run " + runId.slice(0, 8));
+    }
+  } catch (e) {
+    el.innerHTML = prev;
+    alert("Couldn't load that run: " + (e.message || e));
+  }
+}
+
+$("runRefresh").onclick = refreshRuns;
+$("runScope").onchange = refreshRuns;
+
 $("fwFile").onchange = e => {
   const f = e.target.files[0];
   if (!f) return;
