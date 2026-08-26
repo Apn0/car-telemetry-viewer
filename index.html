@@ -158,6 +158,8 @@
   table { border-collapse: collapse; font-size: 12px; width: 100%; }
   th, td { border-bottom: 1px solid var(--grid); padding: 6px 10px; text-align: right; font-variant-numeric: tabular-nums; }
   th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--surface-1); }
+  tr.evt-row { background: rgba(208,59,59,0.10); }
+  .evt-badge { color: var(--status-crit); font-weight: 700; }
   .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
 </style>
 </head>
@@ -193,6 +195,9 @@
         <div class="sub" style="text-align:center">total <span id="vG">–</span> g</div>
       </div>
       <div class="tile"><div class="label">Distance</div><div class="value" id="vDist">–</div><div class="sub">km this session</div></div>
+      <div class="tile"><div class="label">Duration</div><div class="value" id="vDur">–</div><div class="sub">this session</div></div>
+      <div class="tile"><div class="label">Avg speed</div><div class="value" id="vAvgSpeed">–</div><div class="sub">km/h</div></div>
+      <div class="tile"><div class="label">Max G</div><div class="value" id="vMaxG">–</div><div class="sub">g</div></div>
       <div class="tile"><div class="label">Altitude</div><div class="value" id="vAlt">–</div><div class="sub">m</div></div>
       <div class="tile"><div class="label">Heading</div><div class="value" id="vHead">–</div><div class="sub" id="vHeadDeg">–</div></div>
       <div class="tile"><div class="label">GPS accuracy</div><div class="value" id="vAcc">–</div><div class="sub">± m</div></div>
@@ -229,7 +234,8 @@
       Charts backfill automatically: the phone keeps a rolling buffer and republishes it on connect, so
       opening this page mid-drive shows recent history, not just data from the moment you opened it.
       The G-force dot uses the phone's own axes (x = across the phone, y = along it), so mount the phone
-      consistently if you want lateral/longitudinal to be meaningful.
+      consistently if you want lateral/longitudinal to be meaningful. Red dots mark speed-limit or
+      hard-brake/turn alerts, if enabled in the app's settings.
     </p>
   </section>
 
@@ -273,7 +279,7 @@
 
     <div class="table-wrap">
       <table id="dataTable">
-        <thead><tr><th>time</th><th>lat</th><th>lon</th><th>km/h</th><th>alt m</th><th>±m</th><th>heading</th><th>g</th></tr></thead>
+        <thead><tr><th>time</th><th>lat</th><th>lon</th><th>km/h</th><th>alt m</th><th>±m</th><th>heading</th><th>g</th><th>event</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -310,7 +316,8 @@ let client = null;
 let samples = [];            // live + backfilled history samples
 let seenTs = new Set();      // dedupe history vs live overlap
 let replay = { samples: [], idx: 0, playing: false, timer: null };
-let distanceKm = 0, maxSpeed = 0, lastGeo = null, lastMsgAt = 0;
+let distanceKm = 0, maxSpeed = 0, maxG = 0, avgSpeedSum = 0, avgSpeedCount = 0, lastGeo = null, lastMsgAt = 0;
+let tripDurationSec = 0;
 
 // ---------- forward view ----------
 // Shows the upcoming 300-500m of a preloaded reference route (e.g. a GPX
@@ -582,6 +589,8 @@ function addLiveSample(s) {
   samples.push(s);
   if (samples.length > 7200) samples.splice(0, samples.length - 7200);
   if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+  if (s.g != null) maxG = Math.max(maxG, s.g);
+  if (s.fix && s.spd != null) { avgSpeedSum += s.spd; avgSpeedCount++; }
   if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
     if (lastGeo) distanceKm += haversineKm(lastGeo.lat, lastGeo.lon, s.lat, s.lon);
     lastGeo = { lat: s.lat, lon: s.lon };
@@ -610,9 +619,11 @@ function ingestHistory(list) {
 }
 
 function recomputeStats() {
-  distanceKm = 0; maxSpeed = 0; lastGeo = null;
+  distanceKm = 0; maxSpeed = 0; maxG = 0; avgSpeedSum = 0; avgSpeedCount = 0; lastGeo = null;
   for (const s of samples) {
     if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+    if (s.g != null) maxG = Math.max(maxG, s.g);
+    if (s.fix && s.spd != null) { avgSpeedSum += s.spd; avgSpeedCount++; }
     if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
       if (lastGeo) distanceKm += haversineKm(lastGeo.lat, lastGeo.lon, s.lat, s.lon);
       lastGeo = { lat: s.lat, lon: s.lon };
@@ -637,12 +648,22 @@ function headingLabel(brg) {
   const dirs = ["N","NE","E","SE","S","SW","W","NW"];
   return dirs[Math.round(brg / 45) % 8] + " " + Math.round(brg) + "°";
 }
+function formatDuration(totalSec) {
+  if (!totalSec || totalSec < 0 || isNaN(totalSec)) return "–";
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = Math.floor(totalSec % 60);
+  const pad = n => String(n).padStart(2, "0");
+  return h > 0 ? h + ":" + pad(m) + ":" + pad(s) : m + ":" + pad(s);
+}
 
 function render(s, all) {
+  if (mode === "live") tripDurationSec = all.length ? (s.t - all[0].t) / 1000 : 0;
   $("vSpeed").textContent = fmt(s.spd, 0);
   $("vMax").textContent = fmt(maxSpeed, 0);
   $("vG").textContent = fmt(s.g, 2);
   $("vDist").textContent = fmt(distanceKm, 2);
+  $("vDur").textContent = formatDuration(tripDurationSec);
+  $("vAvgSpeed").textContent = avgSpeedCount ? fmt(avgSpeedSum / avgSpeedCount, 0) : "–";
+  $("vMaxG").textContent = fmt(maxG, 2);
   $("vAlt").textContent = fmt(s.alt, 0);
   $("vAcc").textContent = fmt(s.hacc, 0);
   $("vCount").textContent = all.length + " samples";
@@ -730,16 +751,20 @@ function chartOpts(yMaxCb) {
   };
 }
 
+function eventDataset() {
+  return { label: "Event", data: [], showLine: false, borderColor: "transparent",
+    backgroundColor: css("--status-crit"), pointRadius: 5, pointHoverRadius: 6 };
+}
 function makeCharts() {
   if (speedChart) speedChart.destroy();
   if (gChart) gChart.destroy();
   const sOpts = chartOpts(60);
   sOpts.data.datasets = [{ label: "Speed", data: [], borderColor: css("--series-1"),
-    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }];
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }, eventDataset()];
   speedChart = new Chart($("speedChart"), sOpts);
   const gOpts = chartOpts(1);
   gOpts.data.datasets = [{ label: "G", data: [], borderColor: css("--series-2"),
-    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }];
+    borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: 0 }, eventDataset()];
   gChart = new Chart($("gChart"), gOpts);
 }
 
@@ -749,14 +774,18 @@ function updateCharts(all, nowT, force) {
   lastChartUpdate = Date.now();
   const from = nowT - WINDOW_MS;
   const win = all.filter(s => s.t >= from);
+  const evts = win.filter(s => s.evS || s.evB);
   speedChart.data.datasets[0].data = win.map(s => ({ x: (s.t - nowT) / 1000, y: s.spd ?? 0 }));
+  speedChart.data.datasets[1].data = evts.map(s => ({ x: (s.t - nowT) / 1000, y: s.spd ?? 0 }));
   gChart.data.datasets[0].data = win.map(s => ({ x: (s.t - nowT) / 1000, y: s.g ?? 0 }));
+  gChart.data.datasets[1].data = evts.map(s => ({ x: (s.t - nowT) / 1000, y: s.g ?? 0 }));
   speedChart.update("none");
   gChart.update("none");
 }
 
 // ---------- map ----------
-let map, tileLayer, trail, marker;
+let map, tileLayer, trail, marker, eventMarkersLayer;
+let plottedEventTs = new Set();
 function isDark() {
   const t = document.documentElement.getAttribute("data-theme");
   if (t === "dark") return true;
@@ -767,6 +796,7 @@ function makeMap() {
   map = L.map("map", { zoomControl: true }).setView([52.1, 5.3], 8);
   setTiles();
   trail = L.polyline([], { color: css("--series-1"), weight: 3 }).addTo(map);
+  eventMarkersLayer = L.layerGroup().addTo(map);
   marker = L.circleMarker([0, 0], { radius: 8, color: "#fff", weight: 2,
     fillColor: css("--series-1"), fillOpacity: 1 });
 }
@@ -783,6 +813,14 @@ function updateMap(all, s) {
   const pts = all.filter(p => p.fix && p.lat != null).map(p => [p.lat, p.lon]);
   trail.setLatLngs(pts);
   $("mapCount").textContent = pts.length;
+  for (const p of all) {
+    if (!(p.evS || p.evB) || p.lat == null || plottedEventTs.has(p.t)) continue;
+    plottedEventTs.add(p.t);
+    L.circleMarker([p.lat, p.lon], { radius: 5, color: "#fff", weight: 1.5,
+      fillColor: css("--status-crit"), fillOpacity: 1 })
+      .bindTooltip(p.evS ? "speed" : "hard brake/turn")
+      .addTo(eventMarkersLayer);
+  }
   if (s && s.fix && s.lat != null) {
     marker.setLatLng([s.lat, s.lon]);
     if (!map.hasLayer(marker)) marker.addTo(map);
@@ -791,12 +829,18 @@ function updateMap(all, s) {
 }
 
 // ---------- data table ----------
+function eventBadge(s) {
+  if (s.evS && s.evB) return "<span class=\"evt-badge\">speed+brake</span>";
+  if (s.evS) return "<span class=\"evt-badge\">speed</span>";
+  if (s.evB) return "<span class=\"evt-badge\">brake</span>";
+  return "–";
+}
 function updateTable(all) {
   const rows = all.slice(-300).reverse().map(s =>
-    "<tr><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
+    "<tr" + (s.evS || s.evB ? " class=\"evt-row\"" : "") + "><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
     "</td><td>" + fmt(s.lon, 5) + "</td><td>" + fmt(s.spd, 1) + "</td><td>" + fmt(s.alt, 0) +
     "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + (s.brg != null ? Math.round(s.brg) + "°" : "–") +
-    "</td><td>" + fmt(s.g, 2) + "</td></tr>").join("");
+    "</td><td>" + fmt(s.g, 2) + "</td><td>" + eventBadge(s) + "</td></tr>").join("");
   $("dataTable").querySelector("tbody").innerHTML = rows;
 }
 
@@ -807,7 +851,8 @@ function parseCsv(text) {
   const col = name => head.indexOf(name);
   const iT = col("epoch_ms"), iLat = col("lat"), iLon = col("lon"), iAlt = col("alt_m"),
         iSpd = col("speed_kmh"), iBrg = col("bearing_deg"), iAcc = col("gps_accuracy_m"),
-        iAx = col("ax_ms2"), iAy = col("ay_ms2"), iAz = col("az_ms2"), iG = col("g_total");
+        iAx = col("ax_ms2"), iAy = col("ay_ms2"), iAz = col("az_ms2"), iG = col("g_total"),
+        iEvS = col("speed_alert"), iEvB = col("brake_alert");
   const out = [];
   for (let i = 1; i < lines.length; i++) {
     const c = lines[i].split(",");
@@ -816,7 +861,8 @@ function parseCsv(text) {
     out.push({
       t: num(iT), lat: num(iLat), lon: num(iLon), alt: num(iAlt), spd: num(iSpd),
       brg: num(iBrg), hacc: num(iAcc), ax: num(iAx), ay: num(iAy), az: num(iAz),
-      g: num(iG), fix: c[iLat] !== ""
+      g: num(iG), fix: c[iLat] !== "",
+      evS: iEvS >= 0 && c[iEvS] === "1", evB: iEvB >= 0 && c[iEvB] === "1"
     });
   }
   return out.filter(s => s.t);
@@ -834,11 +880,15 @@ function enterReplay(list, name) {
   $("scrub").value = 0;
   setStatus("warn", "replay: " + name);
   switchTab("data");
-  distanceKm = 0; maxSpeed = 0; lastGeo = null;
+  distanceKm = 0; maxSpeed = 0; maxG = 0; avgSpeedSum = 0; avgSpeedCount = 0; lastGeo = null;
+  tripDurationSec = list.length ? (list[list.length - 1].t - list[0].t) / 1000 : 0;
+  eventMarkersLayer.clearLayers(); plottedEventTs = new Set();
   // precompute distance/max over whole file for the tiles
   let lg = null;
   list.forEach(s => {
     if (s.spd != null) maxSpeed = Math.max(maxSpeed, s.spd);
+    if (s.g != null) maxG = Math.max(maxG, s.g);
+    if (s.fix && s.spd != null) { avgSpeedSum += s.spd; avgSpeedCount++; }
     if (s.fix && s.lat != null && (s.hacc == null || s.hacc < 50)) {
       if (lg) distanceKm += haversineKm(lg.lat, lg.lon, s.lat, s.lon);
       lg = { lat: s.lat, lon: s.lon };
@@ -891,7 +941,9 @@ $("connectBtn").onclick = () => {
   mode = "live"; followCar = true;
   $("replaybar").classList.add("inactive");
   ["playBtn", "scrub", "exitReplay"].forEach(id => $(id).disabled = true);
-  samples = []; seenTs = new Set(); distanceKm = 0; maxSpeed = 0; lastGeo = null; lastMsgAt = 0;
+  samples = []; seenTs = new Set(); distanceKm = 0; maxSpeed = 0; maxG = 0;
+  avgSpeedSum = 0; avgSpeedCount = 0; tripDurationSec = 0; lastGeo = null; lastMsgAt = 0;
+  eventMarkersLayer.clearLayers(); plottedEventTs = new Set();
   connect($("chInput").value.trim().toLowerCase());
 };
 $("shareBtn").onclick = async () => {
@@ -961,7 +1013,7 @@ async function loadStoredRun(runId, asCsv) {
     const mapped = rows.map(r => ({
       t: Number(r.t), lat: r.lat, lon: r.lon, alt: r.alt_m, spd: r.speed_kmh,
       brg: r.bearing_deg, hacc: r.hacc_m, ax: r.ax_ms2, ay: r.ay_ms2, az: r.az_ms2,
-      g: r.g_total, fix: !!r.fix
+      g: r.g_total, fix: !!r.fix, evS: !!r.speed_alert, evB: !!r.brake_alert
     }));
     if (asCsv) {
       CT.downloadCsv(CT.samplesToCsv(mapped), "run-" + runId.slice(0, 8) + ".csv");
