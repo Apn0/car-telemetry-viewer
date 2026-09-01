@@ -191,6 +191,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="route.js"></script>
 <script>
 "use strict";
 
@@ -255,14 +256,6 @@ function bearingDeg(a, b) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 function angDiffDeg(a, b) { let d = (b - a) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; }
-
-function parseGpx(text) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  return Array.from(doc.getElementsByTagName("trkpt")).map(el => ({
-    lat: parseFloat(el.getAttribute("lat")),
-    lon: parseFloat(el.getAttribute("lon"))
-  }));
-}
 
 // Builds, once: cumulative distance, per-point heading, and a signed
 // curvature (1/turn-radius, smoothed over CURVATURE_WINDOW_IDX points each
@@ -366,7 +359,7 @@ let loadError = null;
   try {
     const res = await fetch(ROUTE_URL);
     if (!res.ok) throw new Error("HTTP " + res.status);
-    sim = buildSimRoute(parseGpx(await res.text()));
+    sim = buildSimRoute(CTRoute.parseGpx(await res.text()));
     timing = cycleTimings(sim.totalDistM);
     cycleTotalS = timing.decelEnd + 0.001;
     $("distText").textContent = "0.0 / " + (sim.totalDistM / 1000).toFixed(1) + " km";
