@@ -207,3 +207,5 @@ const CTRoute = (() => {
     get loaded()     { return points.length > 1; }
   };
 })();
+
+if (typeof module !== "undefined") module.exports = CTRoute;
