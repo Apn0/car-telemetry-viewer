@@ -295,6 +295,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="geo.js"></script>
 <script src="storage.js"></script>
 <script src="route.js"></script>
 <script>
@@ -330,7 +331,8 @@ const DEFAULT_ROUTE_NAME = "Nürburgring Nordschleife (bundled)";
 let route = null;          // { name, points: [{lat,lon,ele,distM}], loop }
 let routeMatchIdx = 0;     // last matched nearest-point index, for fast incremental search
 
-function haversineM(lat1, lon1, lat2, lon2) { return haversineKm(lat1, lon1, lat2, lon2) * 1000; }
+const haversineM = CTGeo.haversineM;
+const haversineKm = CTGeo.haversineKm;
 
 function buildRoute(name, rawPoints) {
   const points = rawPoints.filter(p => p.lat != null && p.lon != null && !isNaN(p.lat) && !isNaN(p.lon));
@@ -916,13 +918,6 @@ function stepPlayback() {
 }
 
 // ---------- helpers ----------
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371, toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
 
 // ---------- wiring ----------
 $("connectBtn").onclick = () => {
