@@ -612,20 +612,45 @@ async function renderRuns() {
   $("runsCount").textContent = runs.length;
   const el = $("runList");
   if (!runs.length) { el.innerHTML = '<div class="det">No runs recorded yet.</div>'; return; }
-  const parts = [];
+  el.innerHTML = "";
   for (const r of runs.slice(0, 20)) {
     const n = await CT.countSamples(r.runId);
     const pend = await CT.countPending(r.runId);
     const active = running && run && r.runId === run.runId;
     const mins = r.endedAt ? Math.round((r.endedAt - r.startedAt)/60000) : null;
-    parts.push('<div class="runrow"><div class="meta">' +
-      '<div>' + new Date(r.startedAt).toLocaleString() + (active ? " · recording" : "") + '</div>' +
-      '<div class="det">' + n + " samples" + (mins != null ? " · " + mins + " min" : "") +
-        " · ch " + r.channel + (pend ? " · " + pend + " to upload" : " · backed up") + '</div>' +
-      '</div><button data-csv="' + r.runId + '">CSV</button>' +
-      (active ? "" : '<button data-del="' + r.runId + '">✕</button>') + '</div>');
+
+    const row = document.createElement("div");
+    row.className = "runrow";
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const title = document.createElement("div");
+    title.textContent = new Date(r.startedAt).toLocaleString() + (active ? " · recording" : "");
+    meta.appendChild(title);
+
+    const det = document.createElement("div");
+    det.className = "det";
+    det.textContent = n + " samples" + (mins != null ? " · " + mins + " min" : "") +
+      " · ch " + r.channel + (pend ? " · " + pend + " to upload" : " · backed up");
+    meta.appendChild(det);
+
+    row.appendChild(meta);
+
+    const csvBtn = document.createElement("button");
+    csvBtn.dataset.csv = r.runId;
+    csvBtn.textContent = "CSV";
+    row.appendChild(csvBtn);
+
+    if (!active) {
+      const delBtn = document.createElement("button");
+      delBtn.dataset.del = r.runId;
+      delBtn.textContent = "✕";
+      row.appendChild(delBtn);
+    }
+
+    el.appendChild(row);
   }
-  el.innerHTML = parts.join("");
   el.querySelectorAll("[data-csv]").forEach(b => b.onclick = async () => {
     const rows = await CT.getAllSamples(b.dataset.csv);
     CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + b.dataset.csv.slice(0,8) + ".csv");
