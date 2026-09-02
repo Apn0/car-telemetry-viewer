@@ -25,7 +25,7 @@ const CT = (() => {
 
   const UPLOAD_BATCH   = 500;   // rows per RPC call (server cap is 2000)
   const WRITE_FLUSH_MS  = 4000; // buffer window before hitting IndexedDB
-  const WRITE_FLUSH_MAX = 25;   // ...or this many samples, whichever first
+  const WRITE_FLUSH_MAX = 50000;   // ...or this many samples, whichever first
   const CSV_HEADER = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total";
 
   // ---------- ids ----------

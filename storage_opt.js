@@ -25,7 +25,7 @@ const CT = (() => {
 
   const UPLOAD_BATCH   = 500;   // rows per RPC call (server cap is 2000)
   const WRITE_FLUSH_MS  = 4000; // buffer window before hitting IndexedDB
-  const WRITE_FLUSH_MAX = 25;   // ...or this many samples, whichever first
+  const WRITE_FLUSH_MAX = 50000;   // ...or this many samples, whichever first
   const CSV_HEADER = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total";
 
   // ---------- ids ----------
@@ -150,11 +150,34 @@ const CT = (() => {
   async function flushWrites() {
     if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
     if (!writeBuf.size) return 0;
-    const pending = [...writeBuf.entries()];
+
+    // Flatten the pending samples into a single array
+    const pending = [];
+    for (const rows of writeBuf.values()) {
+      for (const r of rows) pending.push(r);
+    }
     writeBuf.clear();
+
+    if (!pending.length) return 0;
+
     let n = 0;
     await tx(STORE_SAMPLES, "readwrite", s => {
-      for (const [, rows] of pending) for (const r of rows) { s.put(r); n++; }
+      // IndexedDB limits and main thread blocking:
+      // Insert in chunks to avoid blocking the event loop for too long on massive batches.
+      const CHUNK_SIZE = 500;
+      let i = 0;
+      function nextChunk() {
+        const limit = Math.min(i + CHUNK_SIZE, pending.length);
+        let lastReq = null;
+        for (; i < limit; i++) {
+          lastReq = s.put(pending[i]);
+          n++;
+        }
+        if (i < pending.length && lastReq) {
+          lastReq.onsuccess = nextChunk;
+        }
+      }
+      nextChunk();
     });
     return n;
   }
