@@ -613,9 +613,12 @@ async function renderRuns() {
   const el = $("runList");
   if (!runs.length) { el.innerHTML = '<div class="det">No runs recorded yet.</div>'; return; }
   const parts = [];
-  for (const r of runs.slice(0, 20)) {
-    const n = await CT.countSamples(r.runId);
-    const pend = await CT.countPending(r.runId);
+  const topRuns = runs.slice(0, 20);
+  const counts = await CT.getRunCounts(topRuns.map(r => r.runId));
+  const countMap = new Map(counts.map(c => [c.runId, c]));
+
+  for (const r of topRuns) {
+    const { n, pend } = countMap.get(r.runId) || { n: 0, pend: 0 };
     const active = running && run && r.runId === run.runId;
     const mins = r.endedAt ? Math.round((r.endedAt - r.startedAt)/60000) : null;
     parts.push('<div class="runrow"><div class="meta">' +
