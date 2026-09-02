@@ -175,11 +175,18 @@ const CT = (() => {
     return tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.index("byRunUploaded").count(IDBKeyRange.only([runId, 0]))));
   }
-  async function markUploaded(runId, ts) {
+  async function getRunCounts(runIds) {
+    return Promise.all(runIds.map(async runId => {
+      const n = await countSamples(runId);
+      const pend = await countPending(runId);
+      return { runId, n, pend };
+    }));
+  }
+  async function markUploaded(items) {
     return tx(STORE_SAMPLES, "readwrite", s => {
-      for (const t of ts) {
-        const g = s.get([runId, t]);
-        g.onsuccess = () => { const v = g.result; if (v) { v.uploaded = 1; s.put(v); } };
+      for (const item of items) {
+        item.uploaded = 1;
+        s.put(item);
       }
     });
   }
@@ -254,7 +261,7 @@ const CT = (() => {
       p_run_id: run.runId,
       p_samples: pend.map(toRemoteRow)
     });
-    await markUploaded(run.runId, pend.map(s => s.t));
+    await markUploaded(pend);
     const remaining = await countPending(run.runId);
     return { sent: pend.length, remaining };
   }
@@ -327,7 +334,7 @@ const CT = (() => {
   return {
     uuid, deviceId, deviceLabel, setDeviceLabel, guessDeviceLabel,
     createRun, getRun, putRun, allRuns, endRun, deleteRun,
-    addSample, flushWrites, bufferedCount, countSamples, countPending, getAllSamples,
+    addSample, flushWrites, bufferedCount, countSamples, countPending, getRunCounts, getAllSamples,
     flushOnce, finishRemote, ensureRemoteRun,
     listRunsByChannel, listRunsByDevice, fetchSamples,
     samplesToCsv, downloadCsv, requestPersistence,
