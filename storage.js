@@ -175,11 +175,11 @@ const CT = (() => {
     return tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.index("byRunUploaded").count(IDBKeyRange.only([runId, 0]))));
   }
-  async function markUploaded(runId, ts) {
+  async function markUploaded(items) {
     return tx(STORE_SAMPLES, "readwrite", s => {
-      for (const t of ts) {
-        const g = s.get([runId, t]);
-        g.onsuccess = () => { const v = g.result; if (v) { v.uploaded = 1; s.put(v); } };
+      for (const item of items) {
+        item.uploaded = 1;
+        s.put(item);
       }
     });
   }
@@ -254,7 +254,7 @@ const CT = (() => {
       p_run_id: run.runId,
       p_samples: pend.map(toRemoteRow)
     });
-    await markUploaded(run.runId, pend.map(s => s.t));
+    await markUploaded(pend);
     const remaining = await countPending(run.runId);
     return { sent: pend.length, remaining };
   }

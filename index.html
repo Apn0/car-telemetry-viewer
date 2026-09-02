@@ -297,6 +297,7 @@
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="geo.js"></script>
 <script src="storage.js"></script>
+<script src="route.js"></script>
 <script>
 "use strict";
 
@@ -346,19 +347,6 @@ function buildRoute(name, rawPoints) {
   return { name, points, loop };
 }
 
-function parseGpx(text) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  const pts = Array.from(doc.getElementsByTagName("trkpt")).map(el => {
-    const ele = el.getElementsByTagName("ele")[0];
-    return {
-      lat: parseFloat(el.getAttribute("lat")),
-      lon: parseFloat(el.getAttribute("lon")),
-      ele: ele ? parseFloat(ele.textContent) : null
-    };
-  });
-  return pts;
-}
-
 function loadRoute(name, points) {
   route = buildRoute(name, points);
   routeMatchIdx = 0;
@@ -397,7 +385,7 @@ async function loadDefaultRoute() {
   try {
     const res = await fetch(DEFAULT_ROUTE_URL);
     if (!res.ok) return;
-    const pts = parseGpx(await res.text());
+    const pts = CTRoute.parseGpx(await res.text());
     loadRoute(DEFAULT_ROUTE_NAME, pts);
   } catch (e) { /* e.g. opened as a local file:// page without a server — ignore */ }
 }
@@ -1030,7 +1018,7 @@ $("fwFile").onchange = e => {
   const r = new FileReader();
   r.onload = () => {
     const isGpx = /\.gpx$/i.test(f.name) || r.result.trim().startsWith("<?xml") || r.result.includes("<gpx");
-    const pts = isGpx ? parseGpx(r.result) : parseCsv(r.result).map(p => ({ lat: p.lat, lon: p.lon, ele: p.alt }));
+    const pts = isGpx ? CTRoute.parseGpx(r.result) : parseCsv(r.result).map(p => ({ lat: p.lat, lon: p.lon, ele: p.alt }));
     loadRoute(f.name, pts);
   };
   r.readAsText(f);
