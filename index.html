@@ -826,12 +826,26 @@ function eventBadge(s) {
   return "–";
 }
 function updateTable(all) {
-  const rows = all.slice(-300).reverse().map(s =>
-    "<tr" + (s.evS || s.evB ? " class=\"evt-row\"" : "") + "><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
-    "</td><td>" + fmt(s.lon, 5) + "</td><td>" + fmt(s.spd, 1) + "</td><td>" + fmt(s.alt, 0) +
-    "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + (s.brg != null ? Math.round(s.brg) + "°" : "–") +
-    "</td><td>" + fmt(s.g, 2) + "</td><td>" + eventBadge(s) + "</td></tr>").join("");
-  $("dataTable").querySelector("tbody").innerHTML = rows;
+  const tbody = $("dataTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  all.slice(-300).reverse().forEach(s => {
+    const tr = document.createElement("tr");
+    if (s.evS || s.evB) tr.className = "evt-row";
+
+    const timeTd = document.createElement("td"); timeTd.textContent = new Date(s.t).toLocaleTimeString(); tr.appendChild(timeTd);
+    const latTd = document.createElement("td"); latTd.textContent = fmt(s.lat, 5); tr.appendChild(latTd);
+    const lonTd = document.createElement("td"); lonTd.textContent = fmt(s.lon, 5); tr.appendChild(lonTd);
+    const spdTd = document.createElement("td"); spdTd.textContent = fmt(s.spd, 1); tr.appendChild(spdTd);
+    const altTd = document.createElement("td"); altTd.textContent = fmt(s.alt, 0); tr.appendChild(altTd);
+    const haccTd = document.createElement("td"); haccTd.textContent = fmt(s.hacc, 0); tr.appendChild(haccTd);
+    const brgTd = document.createElement("td"); brgTd.textContent = (s.brg != null ? Math.round(s.brg) + "°" : "–"); tr.appendChild(brgTd);
+    const gTd = document.createElement("td"); gTd.textContent = fmt(s.g, 2); tr.appendChild(gTd);
+    const evTd = document.createElement("td"); evTd.innerHTML = eventBadge(s); tr.appendChild(evTd);
+
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
 }
 
 // ---------- replay ----------
@@ -918,6 +932,15 @@ function stepPlayback() {
 }
 
 // ---------- helpers ----------
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // ---------- wiring ----------
 $("connectBtn").onclick = () => {
@@ -968,7 +991,7 @@ async function refreshRuns() {
     runs.forEach(r => {
       const when = new Date(r.started_at).toLocaleString();
       const mins = r.ended_at
-        ? Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min"
+        ? escapeHtml(Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min")
         : "in progress";
 
       const row = document.createElement("div");

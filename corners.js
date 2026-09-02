@@ -137,3 +137,5 @@ const CTCorners = (() => {
     get all() { return corners.slice(); }
   };
 })();
+
+if (typeof module !== "undefined") module.exports = CTCorners;

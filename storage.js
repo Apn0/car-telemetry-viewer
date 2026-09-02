@@ -175,6 +175,13 @@ const CT = (() => {
     return tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.index("byRunUploaded").count(IDBKeyRange.only([runId, 0]))));
   }
+  async function getRunCounts(runIds) {
+    return Promise.all(runIds.map(async runId => {
+      const n = await countSamples(runId);
+      const pend = await countPending(runId);
+      return { runId, n, pend };
+    }));
+  }
   async function markUploaded(items) {
     return tx(STORE_SAMPLES, "readwrite", s => {
       for (const item of items) {
@@ -327,10 +334,11 @@ const CT = (() => {
   return {
     uuid, deviceId, deviceLabel, setDeviceLabel, guessDeviceLabel,
     createRun, getRun, putRun, allRuns, endRun, deleteRun,
-    addSample, flushWrites, bufferedCount, countSamples, countPending, getAllSamples,
+    addSample, flushWrites, bufferedCount, countSamples, countPending, getRunCounts, getAllSamples,
     flushOnce, finishRemote, ensureRemoteRun,
     listRunsByChannel, listRunsByDevice, fetchSamples,
     samplesToCsv, downloadCsv, requestPersistence,
     CSV_HEADER, SUPABASE_URL
   };
 })();
+if (typeof module !== 'undefined') module.exports = CT;
