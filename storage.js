@@ -334,3 +334,4 @@ const CT = (() => {
     CSV_HEADER, SUPABASE_URL
   };
 })();
+if (typeof module !== 'undefined') module.exports = CT;
