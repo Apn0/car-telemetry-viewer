@@ -175,12 +175,15 @@ const CT = (() => {
     return tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.index("byRunUploaded").count(IDBKeyRange.only([runId, 0]))));
   }
-  async function getRunCounts(runIds) {
-    return Promise.all(runIds.map(async runId => {
-      const n = await countSamples(runId);
-      const pend = await countPending(runId);
-      return { runId, n, pend };
-    }));
+  async function countPendingMany(runIds) {
+    return tx(STORE_SAMPLES, "readonly", s => {
+      const idx = s.index("byRunUploaded");
+      const reqs = [];
+      for (const runId of runIds) {
+        reqs.push(reqP(idx.count(IDBKeyRange.only([runId, 0]))));
+      }
+      return Promise.all(reqs);
+    });
   }
   async function markUploaded(items) {
     return tx(STORE_SAMPLES, "readwrite", s => {
@@ -334,7 +337,7 @@ const CT = (() => {
   return {
     uuid, deviceId, deviceLabel, setDeviceLabel, guessDeviceLabel,
     createRun, getRun, putRun, allRuns, endRun, deleteRun,
-    addSample, flushWrites, bufferedCount, countSamples, countPending, getRunCounts, getAllSamples,
+    addSample, flushWrites, bufferedCount, countSamples, countPending, countPendingMany, getAllSamples,
     flushOnce, finishRemote, ensureRemoteRun,
     listRunsByChannel, listRunsByDevice, fetchSamples,
     samplesToCsv, downloadCsv, requestPersistence,
