@@ -987,22 +987,56 @@ async function refreshRuns() {
         : "no stored runs from this device yet";
       return;
     }
-    el.innerHTML = runs.map(r => {
-      const when = escapeHtml(new Date(r.started_at).toLocaleString());
+    el.innerHTML = "";
+    runs.forEach(r => {
+      const when = new Date(r.started_at).toLocaleString();
       const mins = r.ended_at
         ? escapeHtml(Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min")
         : "in progress";
-      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid)">' +
-        '<div style="flex:1 1 auto;min-width:0">' +
-          '<div style="font-weight:600;color:var(--text-primary)">' + when +
-            ' <span style="font-weight:400;color:var(--muted)">· ' + escapeHtml(r.device_label || "device") + '</span></div>' +
-          '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(r.sample_count) + ' samples · ' + mins +
-            ' · ch ' + escapeHtml(r.channel) + (r.source !== "browser" ? " · " + escapeHtml(r.source) : "") + '</div>' +
-        '</div>' +
-        '<button data-play="' + escapeHtml(r.run_id) + '">Replay</button>' +
-        '<button data-dl="' + escapeHtml(r.run_id) + '">CSV</button>' +
-      '</div>';
-    }).join("");
+
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "10px";
+      row.style.padding = "8px 0";
+      row.style.borderBottom = "1px solid var(--grid)";
+
+      const content = document.createElement("div");
+      content.style.flex = "1 1 auto";
+      content.style.minWidth = "0";
+
+      const title = document.createElement("div");
+      title.style.fontWeight = "600";
+      title.style.color = "var(--text-primary)";
+      title.textContent = when + " ";
+
+      const span = document.createElement("span");
+      span.style.fontWeight = "400";
+      span.style.color = "var(--muted)";
+      span.textContent = "· " + (r.device_label || "device");
+      title.appendChild(span);
+
+      const det = document.createElement("div");
+      det.style.fontSize = "12px";
+      det.style.color = "var(--muted)";
+      det.textContent = r.sample_count + " samples · " + mins + " · ch " + r.channel + (r.source !== "browser" ? " · " + r.source : "");
+
+      content.appendChild(title);
+      content.appendChild(det);
+      row.appendChild(content);
+
+      const playBtn = document.createElement("button");
+      playBtn.dataset.play = r.run_id;
+      playBtn.textContent = "Replay";
+      row.appendChild(playBtn);
+
+      const csvBtn = document.createElement("button");
+      csvBtn.dataset.dl = r.run_id;
+      csvBtn.textContent = "CSV";
+      row.appendChild(csvBtn);
+
+      el.appendChild(row);
+    });
     el.querySelectorAll("[data-play]").forEach(b => b.onclick = () => loadStoredRun(b.dataset.play, false));
     el.querySelectorAll("[data-dl]").forEach(b => b.onclick = () => loadStoredRun(b.dataset.dl, true));
   } catch (e) {
