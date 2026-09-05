@@ -191,6 +191,7 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="geo.js"></script>
 <script>
 "use strict";
 
@@ -241,12 +242,8 @@ function round2(v) { return Math.round(v * 100) / 100; }
 function round3(v) { return Math.round(v * 1000) / 1000; }
 
 // ---------- route + curvature model ----------
-function haversineM(lat1, lon1, lat2, lon2) {
-  const R = 6371000, toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
+const haversineM = CTGeo.haversineM;
+
 function bearingDeg(a, b) {
   const p1 = a.lat * Math.PI / 180, p2 = b.lat * Math.PI / 180;
   const dl = (b.lon - a.lon) * Math.PI / 180;
@@ -255,14 +252,6 @@ function bearingDeg(a, b) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 function angDiffDeg(a, b) { let d = (b - a) % 360; if (d > 180) d -= 360; if (d < -180) d += 360; return d; }
-
-function parseGpx(text) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  return Array.from(doc.getElementsByTagName("trkpt")).map(el => ({
-    lat: parseFloat(el.getAttribute("lat")),
-    lon: parseFloat(el.getAttribute("lon"))
-  }));
-}
 
 // Builds, once: cumulative distance, per-point heading, and a signed
 // curvature (1/turn-radius, smoothed over CURVATURE_WINDOW_IDX points each
@@ -366,7 +355,7 @@ let loadError = null;
   try {
     const res = await fetch(ROUTE_URL);
     if (!res.ok) throw new Error("HTTP " + res.status);
-    sim = buildSimRoute(parseGpx(await res.text()));
+    sim = buildSimRoute(CTRoute.parseGpx(await res.text()));
     timing = cycleTimings(sim.totalDistM);
     cycleTotalS = timing.decelEnd + 0.001;
     $("distText").textContent = "0.0 / " + (sim.totalDistM / 1000).toFixed(1) + " km";

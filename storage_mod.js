@@ -25,7 +25,7 @@ const CT = (() => {
 
   const UPLOAD_BATCH   = 500;   // rows per RPC call (server cap is 2000)
   const WRITE_FLUSH_MS  = 4000; // buffer window before hitting IndexedDB
-  const WRITE_FLUSH_MAX = 25;   // ...or this many samples, whichever first
+  const WRITE_FLUSH_MAX = 50000;   // ...or this many samples, whichever first
   const CSV_HEADER = "epoch_ms,iso_time,lat,lon,alt_m,speed_kmh,bearing_deg,gps_accuracy_m,ax_ms2,ay_ms2,az_ms2,g_total";
 
   // ---------- ids ----------
@@ -175,18 +175,11 @@ const CT = (() => {
     return tx(STORE_SAMPLES, "readonly", s =>
       reqP(s.index("byRunUploaded").count(IDBKeyRange.only([runId, 0]))));
   }
-  async function getRunCounts(runIds) {
-    return Promise.all(runIds.map(async runId => {
-      const n = await countSamples(runId);
-      const pend = await countPending(runId);
-      return { runId, n, pend };
-    }));
-  }
-  async function markUploaded(items) {
+  async function markUploaded(runId, ts) {
     return tx(STORE_SAMPLES, "readwrite", s => {
-      for (const item of items) {
-        item.uploaded = 1;
-        s.put(item);
+      for (const t of ts) {
+        const g = s.get([runId, t]);
+        g.onsuccess = () => { const v = g.result; if (v) { v.uploaded = 1; s.put(v); } };
       }
     });
   }
@@ -261,7 +254,7 @@ const CT = (() => {
       p_run_id: run.runId,
       p_samples: pend.map(toRemoteRow)
     });
-    await markUploaded(pend);
+    await markUploaded(run.runId, pend.map(s => s.t));
     const remaining = await countPending(run.runId);
     return { sent: pend.length, remaining };
   }
@@ -334,7 +327,7 @@ const CT = (() => {
   return {
     uuid, deviceId, deviceLabel, setDeviceLabel, guessDeviceLabel,
     createRun, getRun, putRun, allRuns, endRun, deleteRun,
-    addSample, flushWrites, bufferedCount, countSamples, countPending, getRunCounts, getAllSamples,
+    addSample, flushWrites, bufferedCount, countSamples, countPending, getAllSamples,
     flushOnce, finishRemote, ensureRemoteRun,
     listRunsByChannel, listRunsByDevice, fetchSamples,
     samplesToCsv, downloadCsv, requestPersistence,

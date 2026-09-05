@@ -295,7 +295,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="geo.js"></script>
 <script src="storage.js"></script>
+<script src="route.js"></script>
 <script>
 "use strict";
 
@@ -329,7 +331,8 @@ const DEFAULT_ROUTE_NAME = "Nürburgring Nordschleife (bundled)";
 let route = null;          // { name, points: [{lat,lon,ele,distM}], loop }
 let routeMatchIdx = 0;     // last matched nearest-point index, for fast incremental search
 
-function haversineM(lat1, lon1, lat2, lon2) { return haversineKm(lat1, lon1, lat2, lon2) * 1000; }
+const haversineM = CTGeo.haversineM;
+const haversineKm = CTGeo.haversineKm;
 
 function buildRoute(name, rawPoints) {
   const points = rawPoints.filter(p => p.lat != null && p.lon != null && !isNaN(p.lat) && !isNaN(p.lon));
@@ -342,19 +345,6 @@ function buildRoute(name, rawPoints) {
   }
   const loop = haversineM(points[0].lat, points[0].lon, points[points.length - 1].lat, points[points.length - 1].lon) < 200;
   return { name, points, loop };
-}
-
-function parseGpx(text) {
-  const doc = new DOMParser().parseFromString(text, "application/xml");
-  const pts = Array.from(doc.getElementsByTagName("trkpt")).map(el => {
-    const ele = el.getElementsByTagName("ele")[0];
-    return {
-      lat: parseFloat(el.getAttribute("lat")),
-      lon: parseFloat(el.getAttribute("lon")),
-      ele: ele ? parseFloat(ele.textContent) : null
-    };
-  });
-  return pts;
 }
 
 function loadRoute(name, points) {
@@ -395,7 +385,7 @@ async function loadDefaultRoute() {
   try {
     const res = await fetch(DEFAULT_ROUTE_URL);
     if (!res.ok) return;
-    const pts = parseGpx(await res.text());
+    const pts = CTRoute.parseGpx(await res.text());
     loadRoute(DEFAULT_ROUTE_NAME, pts);
   } catch (e) { /* e.g. opened as a local file:// page without a server — ignore */ }
 }
@@ -836,12 +826,26 @@ function eventBadge(s) {
   return "–";
 }
 function updateTable(all) {
-  const rows = all.slice(-300).reverse().map(s =>
-    "<tr" + (s.evS || s.evB ? " class=\"evt-row\"" : "") + "><td>" + new Date(s.t).toLocaleTimeString() + "</td><td>" + fmt(s.lat, 5) +
-    "</td><td>" + fmt(s.lon, 5) + "</td><td>" + fmt(s.spd, 1) + "</td><td>" + fmt(s.alt, 0) +
-    "</td><td>" + fmt(s.hacc, 0) + "</td><td>" + (s.brg != null ? Math.round(s.brg) + "°" : "–") +
-    "</td><td>" + fmt(s.g, 2) + "</td><td>" + eventBadge(s) + "</td></tr>").join("");
-  $("dataTable").querySelector("tbody").innerHTML = rows;
+  const tbody = $("dataTable").querySelector("tbody");
+  tbody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  all.slice(-300).reverse().forEach(s => {
+    const tr = document.createElement("tr");
+    if (s.evS || s.evB) tr.className = "evt-row";
+
+    const timeTd = document.createElement("td"); timeTd.textContent = new Date(s.t).toLocaleTimeString(); tr.appendChild(timeTd);
+    const latTd = document.createElement("td"); latTd.textContent = fmt(s.lat, 5); tr.appendChild(latTd);
+    const lonTd = document.createElement("td"); lonTd.textContent = fmt(s.lon, 5); tr.appendChild(lonTd);
+    const spdTd = document.createElement("td"); spdTd.textContent = fmt(s.spd, 1); tr.appendChild(spdTd);
+    const altTd = document.createElement("td"); altTd.textContent = fmt(s.alt, 0); tr.appendChild(altTd);
+    const haccTd = document.createElement("td"); haccTd.textContent = fmt(s.hacc, 0); tr.appendChild(haccTd);
+    const brgTd = document.createElement("td"); brgTd.textContent = (s.brg != null ? Math.round(s.brg) + "°" : "–"); tr.appendChild(brgTd);
+    const gTd = document.createElement("td"); gTd.textContent = fmt(s.g, 2); tr.appendChild(gTd);
+    const evTd = document.createElement("td"); evTd.innerHTML = eventBadge(s); tr.appendChild(evTd);
+
+    frag.appendChild(tr);
+  });
+  tbody.appendChild(frag);
 }
 
 // ---------- replay ----------
@@ -928,12 +932,14 @@ function stepPlayback() {
 }
 
 // ---------- helpers ----------
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const R = 6371, toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
+function escapeHtml(str) {
+  if (str == null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ---------- wiring ----------
@@ -982,19 +988,19 @@ async function refreshRuns() {
       return;
     }
     el.innerHTML = runs.map(r => {
-      const when = new Date(r.started_at).toLocaleString();
+      const when = escapeHtml(new Date(r.started_at).toLocaleString());
       const mins = r.ended_at
-        ? Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min"
+        ? escapeHtml(Math.max(1, Math.round((new Date(r.ended_at) - new Date(r.started_at)) / 60000)) + " min")
         : "in progress";
       return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid)">' +
         '<div style="flex:1 1 auto;min-width:0">' +
           '<div style="font-weight:600;color:var(--text-primary)">' + when +
-            ' <span style="font-weight:400;color:var(--muted)">· ' + (r.device_label || "device") + '</span></div>' +
-          '<div style="font-size:12px;color:var(--muted)">' + r.sample_count + ' samples · ' + mins +
-            ' · ch ' + r.channel + (r.source !== "browser" ? " · " + r.source : "") + '</div>' +
+            ' <span style="font-weight:400;color:var(--muted)">· ' + escapeHtml(r.device_label || "device") + '</span></div>' +
+          '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(r.sample_count) + ' samples · ' + mins +
+            ' · ch ' + escapeHtml(r.channel) + (r.source !== "browser" ? " · " + escapeHtml(r.source) : "") + '</div>' +
         '</div>' +
-        '<button data-play="' + r.run_id + '">Replay</button>' +
-        '<button data-dl="' + r.run_id + '">CSV</button>' +
+        '<button data-play="' + escapeHtml(r.run_id) + '">Replay</button>' +
+        '<button data-dl="' + escapeHtml(r.run_id) + '">CSV</button>' +
       '</div>';
     }).join("");
     el.querySelectorAll("[data-play]").forEach(b => b.onclick = () => loadStoredRun(b.dataset.play, false));
@@ -1035,7 +1041,7 @@ $("fwFile").onchange = e => {
   const r = new FileReader();
   r.onload = () => {
     const isGpx = /\.gpx$/i.test(f.name) || r.result.trim().startsWith("<?xml") || r.result.includes("<gpx");
-    const pts = isGpx ? parseGpx(r.result) : parseCsv(r.result).map(p => ({ lat: p.lat, lon: p.lon, ele: p.alt }));
+    const pts = isGpx ? CTRoute.parseGpx(r.result) : parseCsv(r.result).map(p => ({ lat: p.lat, lon: p.lon, ele: p.alt }));
     loadRoute(f.name, pts);
   };
   r.readAsText(f);

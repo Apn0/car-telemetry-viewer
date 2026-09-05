@@ -3,6 +3,8 @@
 // what's coming up", so the two pages can't drift apart.
 "use strict";
 
+const _CTGeo = typeof CTGeo !== 'undefined' ? CTGeo : require('./geo.js');
+
 const CTRoute = (() => {
 
   const DEFAULT_URL = "routes/nordschleife.gpx";
@@ -13,13 +15,7 @@ const CTRoute = (() => {
   let matchIdx = 0;
   let name = "";
 
-  function haversineM(lat1, lon1, lat2, lon2) {
-    const R = 6371000, toRad = d => d * Math.PI / 180;
-    const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(a));
-  }
+  const haversineM = _CTGeo.haversineM;
 
   function parseGpx(text) {
     const doc = new DOMParser().parseFromString(text, "application/xml");
