@@ -629,8 +629,14 @@ async function renderRuns() {
   const runs = await CT.allRuns();
   $("runsCount").textContent = runs.length;
   const el = $("runList");
-  if (!runs.length) { el.innerHTML = '<div class="det">No runs recorded yet.</div>'; return; }
   el.innerHTML = "";
+  if (!runs.length) {
+    const empty = document.createElement("div");
+    empty.className = "det";
+    empty.textContent = "No runs recorded yet.";
+    el.appendChild(empty);
+    return;
+  }
   for (const r of runs.slice(0, 20)) {
     const n = await CT.countSamples(r.runId);
     const pend = await CT.countPending(r.runId);
@@ -643,40 +649,38 @@ async function renderRuns() {
     const meta = document.createElement("div");
     meta.className = "meta";
 
-    const title = document.createElement("div");
-    title.textContent = new Date(r.startedAt).toLocaleString() + (active ? " · recording" : "");
-    meta.appendChild(title);
+    const titleDiv = document.createElement("div");
+    titleDiv.textContent = new Date(r.startedAt).toLocaleString() + (active ? " · recording" : "");
+    meta.appendChild(titleDiv);
 
-    const det = document.createElement("div");
-    det.className = "det";
-    det.textContent = n + " samples" + (mins != null ? " · " + mins + " min" : "") +
-      " · ch " + r.channel + (pend ? " · " + pend + " to upload" : " · backed up");
-    meta.appendChild(det);
+    const detDiv = document.createElement("div");
+    detDiv.className = "det";
+    detDiv.textContent = n + " samples" + (mins != null ? " · " + mins + " min" : "") +
+        " · ch " + r.channel + (pend ? " · " + pend + " to upload" : " · backed up");
+    meta.appendChild(detDiv);
 
     row.appendChild(meta);
 
     const csvBtn = document.createElement("button");
-    csvBtn.dataset.csv = r.runId;
     csvBtn.textContent = "CSV";
+    csvBtn.onclick = async () => {
+      const rows = await CT.getAllSamples(r.runId);
+      CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + r.runId.slice(0,8) + ".csv");
+    };
     row.appendChild(csvBtn);
 
     if (!active) {
       const delBtn = document.createElement("button");
-      delBtn.dataset.del = r.runId;
       delBtn.textContent = "✕";
+      delBtn.onclick = async () => {
+        if (!confirm("Delete this run from this device? The cloud copy is kept.")) return;
+        await CT.deleteRun(r.runId);
+        renderRuns();
+      };
       row.appendChild(delBtn);
     }
-
     el.appendChild(row);
   }
-  el.querySelectorAll("[data-csv]").forEach(b => b.onclick = async () => {
-    const rows = await CT.getAllSamples(b.dataset.csv);
-    CT.downloadCsv(CT.samplesToCsv(rows), "telemetry-" + b.dataset.csv.slice(0,8) + ".csv");
-  });
-  el.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
-    if (!confirm("Delete this run from this device? The cloud copy is kept.")) return;
-    await CT.deleteRun(b.dataset.del); renderRuns();
-  });
 }
 
 // ---------- toggles ----------
