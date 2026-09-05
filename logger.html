@@ -588,10 +588,18 @@ async function stopLogging({ silent = false } = {}) {
 async function recoverPreviousRuns() {
   const runs = await CT.allRuns();
   let recovered = 0;
+
+  if (runs.length === 0) return 0;
+  const pendingCounts = await CT.countPendingMany(runs.map(r => r.runId));
+  const pendingByRunId = new Map();
+  for (let i = 0; i < runs.length; i++) {
+    pendingByRunId.set(runs[i].runId, pendingCounts[i]);
+  }
+
   for (const r of runs) {
     if (run && r.runId === run.runId) continue;
     if (!$("cloudToggle").checked || !navigator.onLine) break;
-    if (!(await CT.countPending(r.runId))) continue;
+    if (!pendingByRunId.get(r.runId)) continue;
     try {
       let guard = 0;
       for (;;) {

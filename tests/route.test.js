@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 const CTRoute = require('../route.js');
 
 describe('CTRoute.build()', () => {
@@ -80,5 +83,48 @@ describe('CTRoute.build()', () => {
 
     CTRoute.build([{ lat: 0, lon: 0 }, { lat: 1, lon: 1 }]);
     expect(CTRoute.name).toBe('route');
+  });
+});
+
+describe('CTRoute.parseGpx()', () => {
+  test('parses a valid GPX string correctly (happy path)', () => {
+    const gpxString = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1">
+  <trk>
+    <trkseg>
+      <trkpt lat="47.644548" lon="-122.326897">
+        <ele>4.46</ele>
+      </trkpt>
+      <trkpt lat="47.644548" lon="-122.326897">
+        <ele>4.94</ele>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>`;
+    const result = CTRoute.parseGpx(gpxString);
+    expect(result).toEqual([
+      { lat: 47.644548, lon: -122.326897, ele: 4.46 },
+      { lat: 47.644548, lon: -122.326897, ele: 4.94 }
+    ]);
+  });
+
+  test('handles missing elevation (<ele>) gracefully', () => {
+    const gpxString = `<gpx><trk><trkseg><trkpt lat="10.5" lon="20.5"></trkpt></trkseg></trk></gpx>`;
+    const result = CTRoute.parseGpx(gpxString);
+    expect(result).toEqual([
+      { lat: 10.5, lon: 20.5, ele: null }
+    ]);
+  });
+
+  test('returns an empty array when GPX has no <trkpt> tags', () => {
+    const gpxString = `<gpx><trk><trkseg></trkseg></trk></gpx>`;
+    const result = CTRoute.parseGpx(gpxString);
+    expect(result).toEqual([]);
+  });
+
+  test('handles malformed XML string without throwing (returns empty array if no trkpt matched)', () => {
+    const gpxString = `<gpx><trk><trkseg><trkpt lat="10.5" lon="20.5">unclosed tag...`;
+    const result = CTRoute.parseGpx(gpxString);
+    expect(result).toEqual([]);
   });
 });
